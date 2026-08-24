@@ -5,63 +5,69 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   Home,
-  Twitter,
-  Play,
-  Bot,
-  Lightbulb,
-  Flower2,
-  FileText,
   ClipboardList,
-  HeartPulse,
-  Cpu,
-  BookOpen,
-  Workflow,
+  CalendarDays,
+  Repeat2,
+  Bot,
+  MessageCircle,
+  History,
+  Wrench,
+  DollarSign,
+  BarChart3,
+  Target,
+  Share2,
+  Plug,
+  Search,
+  Brain,
+  Activity,
+  Settings,
   Menu,
   X,
 } from "lucide-react";
 
 const navGroups = [
   {
-    name: "Overview",
+    name: "Command",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
-      { href: "/hermes", label: "Hermes", icon: Cpu },
       { href: "/tasks", label: "Tasks", icon: ClipboardList },
-    ],
-  },
-  {
-    name: "Content",
-    items: [
-      { href: "/x", label: "X", icon: Twitter },
-      { href: "/content-os", label: "Pipeline", icon: Workflow },
-      { href: "/articles", label: "Articles", icon: FileText },
-      { href: "/youtube", label: "YouTube", icon: Play },
-    ],
-  },
-  {
-    name: "Data",
-    items: [
-      { href: "/client-pulse", label: "Client Pulse", icon: HeartPulse },
-    ],
-  },
-  {
-    name: "System",
-    items: [
+      { href: "/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/routines", label: "Routines", icon: Repeat2 },
       { href: "/agents", label: "Agents", icon: Bot },
-      { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
-      { href: "/ideas", label: "Ideas", icon: Lightbulb },
-      { href: "/garden", label: "Garden", icon: Flower2 },
+      { href: "/chats", label: "Chats", icon: MessageCircle },
+      { href: "/sessions", label: "Sessions", icon: History },
+      { href: "/skills", label: "Skills", icon: Wrench },
+    ],
+  },
+  {
+    name: "Growth",
+    items: [
+      { href: "/revenue", label: "Revenue", icon: DollarSign },
+      { href: "/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/competitors", label: "Competitors", icon: Target },
+      { href: "/social", label: "Social", icon: Share2 },
+      { href: "/integrations", label: "Integrations", icon: Plug },
+      { href: "/research", label: "Research", icon: Search },
+    ],
+  },
+  {
+    name: "Intelligence",
+    items: [
+      { href: "/brain-dump", label: "Brain Dump", icon: Brain },
+      { href: "/mind", label: "Mind", icon: Brain },
+      { href: "/activity", label: "Activity", icon: Activity },
+      { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
 
-// Mobile tab bar - only show the 5 most important
+// Mobile tab bar - core Mission Control destinations
 const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/x", label: "X", icon: Twitter },
-  { href: "/youtube", label: "YouTube", icon: Play },
-  { href: "/ideas", label: "Ideas", icon: Lightbulb },
+  { href: "/tasks", label: "Tasks", icon: ClipboardList },
+  { href: "/routines", label: "Routines", icon: Repeat2 },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/activity", label: "Activity", icon: Activity },
 ];
 
 export function Sidebar() {
