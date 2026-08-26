@@ -49,7 +49,23 @@ if (DB_URL.startsWith("prisma://") || DB_URL.startsWith("prisma+")) {
 }
 // Cloud Postgres (Prisma Postgres/Neon/Supabase/RDS) needs SSL; localhost doesn't.
 const isLocal = /@(localhost|127\.0\.0\.1)/.test(DB_URL);
-const pool = new pg.Pool({ connectionString: DB_URL, max: 4, ssl: isLocal ? undefined : { rejectUnauthorized: false } });
+let poolConnectionString = DB_URL;
+
+if (!isLocal) {
+  const dbUrl = new URL(DB_URL);
+
+  for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert"]) {
+    dbUrl.searchParams.delete(key);
+  }
+
+  poolConnectionString = dbUrl.toString();
+}
+
+const pool = new pg.Pool({
+  connectionString: poolConnectionString,
+  max: 4,
+  ssl: isLocal ? undefined : { rejectUnauthorized: false }
+});
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 const q = (text, params) => pool.query(text, params);
@@ -73,6 +89,14 @@ async function setStore(key, data) {
      ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, "updatedAt" = now()`,
     [key, JSON.stringify(data)]
   );
+}
+
+async function getStore(key) {
+  const { rows } = await q(
+    `SELECT data FROM "DataStore" WHERE key = $1 LIMIT 1`,
+    [key]
+  );
+  return rows[0]?.data ?? null;
 }
 
 /* ─────────────── PULL: mirror Hermes → Postgres ─────────────── */
@@ -227,10 +251,47 @@ async function generateBriefing() {
 }
 async function maybeDailyBrief() {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  if (now.getHours() >= BRIEF_HOUR && lastBriefDate !== today) {
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Vancouver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+
+  const part = type => parts.find(x => x.type === type)?.value;
+  const today = `${part("year")}-${part("month")}-${part("day")}`;
+  const hour = Number(part("hour"));
+
+  if (hour < BRIEF_HOUR || lastBriefDate === today) return;
+
+  try {
+    const stored = await getStore("hermes-briefing");
+    const generatedAt = stored?.generatedAt;
+
+    if (generatedAt) {
+      const storedParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Vancouver",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(new Date(generatedAt));
+
+      const storedPart = type => storedParts.find(x => x.type === type)?.value;
+      const storedDate = `${storedPart("year")}-${storedPart("month")}-${storedPart("day")}`;
+
+      if (storedDate === today) {
+        lastBriefDate = today;
+        return;
+      }
+    }
+
+    await generateBriefing();
     lastBriefDate = today;
-    try { await generateBriefing(); } catch (e) { log("daily brief err", e.message); }
+  } catch (e) {
+    log("daily brief err", e.message);
   }
 }
 

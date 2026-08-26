@@ -22,7 +22,51 @@ interface KanbanTask { id: string; title: string; assignee: string; status: stri
 interface HermesKanban { board: string; slug: string; total: number; counts: Record<string, number>; tasks: KanbanTask[] }
 interface ScoreComponent { score: number; weight?: number; label: string; detail?: string }
 interface ScoreData { score: number; grade: string; label: string; color: string; period?: string; components: Record<string, ScoreComponent> }
+interface HermesHealth {
+  online: boolean;
+  gateway: string;
+  detail?: string;
+  lastSeen: string | null;
+}
 
+interface ActivityEvent {
+  id: string;
+  kind: string;
+  title: string;
+  detail: string | null;
+  agent: string | null;
+  level: string;
+  meta: unknown;
+  createdAt: string;
+}
+
+interface AgentRequestItem {
+  id: string;
+  origin: string;
+  kind: string;
+  title: string;
+  status: string;
+  sideEffecting: boolean;
+  result: string | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+interface CronJob {
+  id: string;
+  status: string;
+  name: string;
+  schedule: string;
+  nextRun: string | null;
+  lastRun: string | null;
+  lastResult: string | null;
+  deliver: string | null;
+  skills: string | null;
+  script: string | null;
+  mode: string | null;
+}
 interface HomeData {
   xFollowers: number; xGoal: number; xHandle: string;
   topTweets: Tweet[]; topTweet: Tweet | null; xViewsThisWeek: number;
@@ -451,11 +495,27 @@ export default function Dashboard() {
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [score, setScore] = useState<ScoreData | null>(null);
-
+const [health, setHealth] = useState<HermesHealth | null>(null);
+const [activity, setActivity] = useState<ActivityEvent[]>([]);
   useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     fetch("/api/score").then(r => r.ok ? r.json() : null).then(d => { if (d) setScore(d); }).catch(() => {});
-  }, []);
+  }, []);useEffect(() => {
+  fetch("/api/hermes/health")
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d) setHealth(d); })
+    .catch(() => {});
+}, []);
+useEffect(() => {
+  fetch("/api/hermes/activity?take=20")
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (Array.isArray(d)) setActivity(d);
+      else if (Array.isArray(d?.events)) setActivity(d.events);
+    })
+    .catch(() => {});
+}, []);
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
