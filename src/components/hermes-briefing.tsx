@@ -36,7 +36,7 @@ function sectionTone(label: string): string {
   return "var(--text-3)";
 }
 
-export function HermesBriefing() {
+export function HermesBriefing({ compact = false }: { compact?: boolean }) {
   const [data, setData] = useState<Briefing | null>(null);
   const [pending, setPending] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -74,7 +74,7 @@ export function HermesBriefing() {
   const empty = !data || !data.generatedAt || !data.summary;
 
   return (
-    <Panel className="p-6">
+    <Panel className={compact ? "p-4 sm:p-5" : "p-6"}>
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex items-center gap-2.5">
           <Sunrise className="w-4 h-4 text-[var(--accent)]" />
@@ -98,7 +98,7 @@ export function HermesBriefing() {
       </div>
 
       {empty ? (
-        <div className="py-6 text-center">
+        <div className={compact ? "py-3 text-center" : "py-6 text-center"}>
           <p className="text-[14px] text-[var(--text-2)]">
             {generating ? "Hermes is writing your brief… (~1 min)" : loaded ? "No brief yet." : "Loading…"}
           </p>
@@ -116,7 +116,7 @@ export function HermesBriefing() {
           <p className="text-[14px] leading-relaxed text-[var(--text-2)] max-w-[75ch]">{data!.summary}</p>
 
           {(data!.sections ?? []).length > 0 && (
-            <div className="mt-6 grid sm:grid-cols-2 gap-x-8 gap-y-6">
+            <div className={`${compact ? "mt-4 gap-y-3" : "mt-6 gap-y-6"} grid sm:grid-cols-2 gap-x-8`}>
               {data!.sections!.map((s, i) => (
                 <div key={i}>
                   <div className="flex items-center gap-2 mb-2">
@@ -125,7 +125,7 @@ export function HermesBriefing() {
                   </div>
                   <div>
                     {s.items.map((item, j) => (
-                      <div key={j} className="flex gap-2.5 py-1.5 border-b border-[var(--line)] last:border-0">
+                      <div key={j} className={`flex gap-2.5 ${compact ? "py-1" : "py-1.5"} border-b border-[var(--line)] last:border-0`}>
                         <span className="text-[var(--text-4)] shrink-0 pt-0.5 text-[12px]">·</span>
                         <p className="flex-1 text-[13px] leading-snug text-[var(--text-2)]">{item}</p>
                       </div>

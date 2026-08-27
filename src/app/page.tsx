@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { Twitter, Youtube, ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import {
+  Activity, ArrowUpRight, Bot, CalendarClock, CheckCircle2, ChevronRight,
+  CircleAlert, Radio, Server, Twitter, Youtube,
+} from "lucide-react";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Sparkline } from "@/components/sparkline";
 import { HermesBriefing } from "@/components/hermes-briefing";
 import { ApprovalInbox } from "@/components/approval-inbox";
+import { EmptyState, Eyebrow, Panel, Pill, SectionHeader } from "@/components/ui/kit";
 
 // ── Types ─────────────────────────────────────────────────
 interface HLPosition {
@@ -17,7 +21,6 @@ interface Video  { title: string; thumbnail: string; url: string; publishedAt: s
 interface Draft  { id: string; text: string }
 interface YTIdea { title: string; hook: string }
 interface BuildIdea { title: string; description: string; effort: string }
-interface Process { name: string; status: string; uptime: string }
 interface KanbanTask { id: string; title: string; assignee: string; status: string; priority: number }
 interface HermesKanban { board: string; slug: string; total: number; counts: Record<string, number>; tasks: KanbanTask[] }
 interface ScoreComponent { score: number; weight?: number; label: string; detail?: string }
@@ -67,6 +70,17 @@ interface CronJob {
   script: string | null;
   mode: string | null;
 }
+interface HermesTask {
+  id: string;
+  board: string;
+  title: string;
+  assignee: string | null;
+  status: string;
+  priority: number | null;
+  result: string | null;
+  updatedAt: string;
+  syncedAt: string;
+}
 interface HomeData {
   xFollowers: number; xGoal: number; xHandle: string;
   topTweets: Tweet[]; topTweet: Tweet | null; xViewsThisWeek: number;
@@ -80,7 +94,6 @@ interface HomeData {
   polyBalance: number; polyWinRate: number; polyTodayPnl: number; polyAllTimePnl: number;
   hlBalance: number; hlPosition: HLPosition | null; hlTodayPnl: number; hlAllTimePnl: number;
   allTimePnl: number; todayPnl: number;
-  processes: Process[];
   hermesKanban: HermesKanban;
   xViewsTrend: number[];
   snapshots: { d: string; xf: number; yt: number; pnl: number }[];
@@ -94,7 +107,7 @@ const EMPTY: HomeData = {
   topVideo: null, latestVideo: null, ytSubscribers: 0, ytGoal: 20000,
   polyBalance: 0, polyWinRate: 0, polyTodayPnl: 0, polyAllTimePnl: 0,
   hlBalance: 0, hlPosition: null, hlTodayPnl: 0, hlAllTimePnl: 0,
-  allTimePnl: 0, todayPnl: 0, processes: [],
+  allTimePnl: 0, todayPnl: 0,
   hermesKanban: { board: "Hermes 24/7 Assistant", slug: "hermes-24-7-assistant", total: 0, counts: {}, tasks: [] },
   xViewsTrend: [], snapshots: [],
 };
@@ -381,22 +394,187 @@ function YouTubeVideoTabs({ topVideo, latestVideo }: { topVideo: Video | null; l
   );
 }
 
-// ── Agents strip ──────────────────────────────────────────
-function AgentsStrip({ processes }: { processes: Process[] }) {
-  if (processes.length === 0) return null;
+// ── Operational dashboard ────────────────────────────────
+type WorkforceAgent = {
+  name: string;
+  lastEvent: ActivityEvent | null;
+  tasks: HermesTask[];
+};
+
+function relativeTime(value: string | null, future = false) {
+  if (!value) return "—";
+  const stamp = new Date(value).getTime();
+  if (Number.isNaN(stamp)) return value;
+  const diff = future ? stamp - Date.now() : Date.now() - stamp;
+  if (diff < 0) return future ? "due" : "just now";
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return future ? "<1m" : "just now";
+  if (minutes < 60) return `${future ? "in " : ""}${minutes}m${future ? "" : " ago"}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${future ? "in " : ""}${hours}h${future ? "" : " ago"}`;
+  const days = Math.floor(hours / 24);
+  return `${future ? "in " : ""}${days}d${future ? "" : " ago"}`;
+}
+
+function levelColor(level: string) {
+  if (level === "up") return "var(--up)";
+  if (level === "warn") return "var(--warn)";
+  if (level === "down") return "var(--down)";
+  return "var(--accent)";
+}
+
+function statusTone(status: string): "neutral" | "up" | "down" | "warn" | "accent" {
+  const value = status.toLowerCase();
+  if (value.includes("fail") || value.includes("block")) return "down";
+  if (value.includes("await") || value.includes("pause")) return "warn";
+  if (value.includes("running") || value.includes("progress") || value.includes("doing")) return "accent";
+  if (value.includes("done") || value.includes("complete") || value.includes("active")) return "up";
+  return "neutral";
+}
+
+function OperationalMetric({ label, value, note, icon, tone = "neutral" }: {
+  label: string; value: string | number; note: string; icon: React.ReactNode;
+  tone?: "neutral" | "up" | "down" | "warn" | "accent";
+}) {
+  const colors = { neutral: "var(--text-2)", up: "var(--up)", down: "var(--down)", warn: "var(--warn)", accent: "var(--accent)" };
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="eyebrow mr-1">System</span>
-      {processes.map((p, i) => (
-        <div key={i} className="flex items-center gap-1.5 rounded-lg border border-[var(--hq-hairline)] bg-white/[0.02] px-2.5 py-1.5">
-          <span className="relative flex w-1.5 h-1.5">
-            {p.status === "online" && <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ background: "color-mix(in srgb, var(--up) 60%, transparent)" }} />}
-            <span className="relative inline-flex w-1.5 h-1.5 rounded-full" style={{ background: p.status === "online" ? "var(--up)" : "var(--down)" }} />
-          </span>
-          <span className="text-[var(--hq-text-dim)] text-[12px]">{p.name}</span>
-          <span className="num text-[var(--hq-text-ghost)] text-[10px]">{p.uptime}</span>
-        </div>
-      ))}
+    <Panel className="p-4 min-h-[124px] flex flex-col justify-between">
+      <div className="flex items-center justify-between gap-3">
+        <Eyebrow>{label}</Eyebrow>
+        <span style={{ color: colors[tone] }}>{icon}</span>
+      </div>
+      <div>
+        <div className="num text-[27px] font-semibold tracking-[-0.025em] text-[var(--text)]">{value}</div>
+        <p className="mt-1 text-[11.5px] text-[var(--text-3)] line-clamp-1">{note}</p>
+      </div>
+    </Panel>
+  );
+}
+
+function WorkforcePanel({ agents, loaded }: { agents: WorkforceAgent[]; loaded: boolean }) {
+  return (
+    <div>
+      <SectionHeader
+        label="Workforce"
+        title="Active agents"
+        action={<span className="num text-[11px] text-[var(--text-3)]">Observed from Hermes</span>}
+      />
+      <Panel className="p-2">
+        {!loaded ? (
+          <EmptyState className="!py-8" icon={<Bot className="w-6 h-6" />} title="Checking workforce activity…" />
+        ) : agents.length === 0 ? (
+          <EmptyState
+            className="!py-8"
+            icon={<Bot className="w-6 h-6" />}
+            title="No active agent data yet"
+            hint="Agents will appear when Hermes reports an assigned task or an attributed activity event."
+          />
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-2">
+            {agents.map((agent) => {
+              const current = agent.tasks.find((task) => statusTone(task.status) === "accent") ?? agent.tasks[0];
+              return (
+                <div key={agent.name} className="rounded-[12px] border border-[var(--line)] bg-[var(--surface-2)] p-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]">
+                      <Bot className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[14px] font-medium text-[var(--text)] truncate">{agent.name}</p>
+                        <Pill tone={current ? statusTone(current.status) : "neutral"} className="!px-2 !py-0.5">
+                          {current?.status ?? "recent activity"}
+                        </Pill>
+                      </div>
+                      <p className="mt-1 text-[12px] text-[var(--text-3)] truncate">
+                        {current?.title ?? agent.lastEvent?.title ?? "Activity observed"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 pt-2.5 border-t border-[var(--line)] flex items-center justify-between num text-[10.5px] text-[var(--text-3)]">
+                    <span>{agent.tasks.length} assigned task{agent.tasks.length === 1 ? "" : "s"}</span>
+                    <span>{agent.lastEvent ? relativeTime(agent.lastEvent.createdAt) : "task sync"}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+function ActivityFeed({ events, loaded }: { events: ActivityEvent[]; loaded: boolean }) {
+  return (
+    <div>
+      <SectionHeader label="Live activity" title="Hermes event stream" action={<Radio className="w-4 h-4 text-[var(--accent)]" />} />
+      <Panel className="p-2">
+        {!loaded ? (
+          <EmptyState className="!py-8" icon={<Activity className="w-6 h-6" />} title="Loading recent activity…" />
+        ) : events.length === 0 ? (
+          <EmptyState className="!py-8" icon={<Activity className="w-6 h-6" />} title="No recent activity" hint="Hermes events will appear here when reported." />
+        ) : (
+          <div className="divide-y divide-[var(--line)] max-h-[310px] overflow-auto">
+            {events.slice(0, 10).map((event) => (
+              <div key={event.id} className="flex items-start gap-3 px-3.5 py-2.5">
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: levelColor(event.level) }} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2">
+                    <p className="text-[13px] font-medium text-[var(--text)] leading-snug">{event.title}</p>
+                    <span className="num text-[10.5px] text-[var(--text-3)] shrink-0 ml-auto">{relativeTime(event.createdAt)}</span>
+                  </div>
+                  {event.detail && <p className="mt-1 text-[12px] text-[var(--text-2)] leading-snug line-clamp-2">{event.detail}</p>}
+                  {event.agent && <span className="num text-[10.5px] text-[var(--text-3)] mt-1.5 inline-block">{event.agent}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <a href="/hermes" className="m-3 mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[var(--accent)]">
+          Open full activity <ArrowUpRight className="w-3 h-3" />
+        </a>
+      </Panel>
+    </div>
+  );
+}
+
+function UpcomingRoutines({ jobs, loaded, syncedAt }: { jobs: CronJob[]; loaded: boolean; syncedAt: string | null }) {
+  const visible = [...jobs]
+    .sort((a, b) => Number(b.status === "active") - Number(a.status === "active"))
+    .slice(0, 5);
+  return (
+    <div>
+      <SectionHeader label="Automation" title="Upcoming routines" action={<span className="num text-[11px] text-[var(--text-3)]">synced {relativeTime(syncedAt)}</span>} />
+      <Panel className="p-2">
+        {!loaded ? (
+          <EmptyState className="!py-8" icon={<CalendarClock className="w-6 h-6" />} title="Loading routines…" />
+        ) : visible.length === 0 ? (
+          <EmptyState className="!py-8" icon={<CalendarClock className="w-6 h-6" />} title="No routines scheduled" hint="Hermes cron jobs will appear here after the bridge syncs them." />
+        ) : (
+          <div className="divide-y divide-[var(--line)]">
+            {visible.map((job) => (
+              <div key={job.id} className="flex items-start gap-3 px-3.5 py-2.5">
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: job.status === "active" ? "var(--up)" : "var(--text-3)" }} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-medium text-[var(--text)] truncate">{job.name || job.id}</p>
+                    <Pill tone={job.status === "active" ? "up" : "neutral"} className="!px-2 !py-0.5 ml-auto">{job.status}</Pill>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 num text-[10.5px] text-[var(--text-3)]">
+                    <span className="text-[var(--text-2)]">{job.schedule || "Schedule unavailable"}</span>
+                    {job.nextRun && <span>next {relativeTime(job.nextRun, true)}</span>}
+                    {job.deliver && <span>→ {job.deliver.split(":")[0]}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <a href="/hermes" className="m-3 mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[var(--accent)]">
+          Manage routines <ArrowUpRight className="w-3 h-3" />
+        </a>
+      </Panel>
     </div>
   );
 }
@@ -490,147 +668,165 @@ function ScoreGauge({ score }: { score: ScoreData }) {
 
 // ── Main ──────────────────────────────────────────────────
 export default function Dashboard() {
-  const [data, setData] = useState<HomeData>(EMPTY);
   const [time, setTime] = useState(new Date());
-  const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [score, setScore] = useState<ScoreData | null>(null);
-const [health, setHealth] = useState<HermesHealth | null>(null);
-const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [health, setHealth] = useState<HermesHealth | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [requests, setRequests] = useState<AgentRequestItem[]>([]);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [tasks, setTasks] = useState<HermesTask[]>([]);
+  const [taskTotal, setTaskTotal] = useState(0);
+  const [jobs, setJobs] = useState<CronJob[]>([]);
+  const [cronSyncedAt, setCronSyncedAt] = useState<string | null>(null);
+  const [operationsLoaded, setOperationsLoaded] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
+  const loadOperations = useCallback(async () => {
+    const getJSON = async <T,>(url: string): Promise<T | null> => {
+      try {
+        const response = await fetch(url);
+        return response.ok ? await response.json() as T : null;
+      } catch {
+        return null;
+      }
+    };
+    const [healthData, activityData, requestData, taskData, cronData] = await Promise.all([
+      getJSON<HermesHealth>("/api/hermes/health"),
+      getJSON<{ events: ActivityEvent[] }>("/api/hermes/activity?take=30"),
+      getJSON<{ requests: AgentRequestItem[]; pending: number }>("/api/hermes/requests?take=100"),
+      getJSON<{ tasks: HermesTask[]; total: number }>("/api/hermes/tasks"),
+      getJSON<{ jobs: CronJob[]; syncedAt: string | null }>("/api/hermes/crons"),
+    ]);
+    if (healthData) setHealth(healthData);
+    if (activityData) setActivity(activityData.events ?? []);
+    if (requestData) {
+      setRequests(requestData.requests ?? []);
+      setPendingRequests(requestData.pending ?? 0);
+    }
+    if (taskData) {
+      setTasks(taskData.tasks ?? []);
+      setTaskTotal(taskData.total ?? taskData.tasks?.length ?? 0);
+    }
+    if (cronData) {
+      setJobs(cronData.jobs ?? []);
+      setCronSyncedAt(cronData.syncedAt ?? null);
+    }
+    setOperationsLoaded(true);
+  }, []);
+
   useEffect(() => {
-    fetch("/api/score").then(r => r.ok ? r.json() : null).then(d => { if (d) setScore(d); }).catch(() => {});
-  }, []);useEffect(() => {
-  fetch("/api/hermes/health")
-    .then(r => r.ok ? r.json() : null)
-    .then(d => { if (d) setHealth(d); })
-    .catch(() => {});
-}, []);
-useEffect(() => {
-  fetch("/api/hermes/activity?take=20")
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      if (Array.isArray(d)) setActivity(d);
-      else if (Array.isArray(d?.events)) setActivity(d.events);
-    })
-    .catch(() => {});
-}, []);
+    loadOperations();
+    const interval = setInterval(loadOperations, 10_000);
+    return () => clearInterval(interval);
+  }, [loadOperations]);
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => {
-    fetch("/api/home")
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) { setData(d); setTimeout(() => setLoaded(true), 100); } })
-      .catch(() => {});
-    const iv = setInterval(() => {
-      fetch("/api/home").then(r => r.ok ? r.json() : null).then(d => { if (d) setData(d); }).catch(() => {});
-    }, 60_000);
-    return () => clearInterval(iv);
-  }, []);
-
   if (!mounted) return null;
 
-  const xd = withDevPreview(snapDelta(data.snapshots, "xf"), data.xFollowers);
-  const ytd = withDevPreview(snapDelta(data.snapshots, "yt"), data.ytSubscribers);
-  const xViewsSeries = DEV_PREVIEW && !data.xViewsTrend.some(v => v > 0)
-    ? sampleSeries(data.xViewsThisWeek || 42000, 14)
-    : data.xViewsTrend;
-
-  const stale = data.daysSincePost > 3 && data.daysSincePost < 999;
   const rise = (i: number) => ({ animationDelay: `${i * 60}ms` });
+  const runningRequests = requests.filter(request => ["approved", "queued", "running"].includes(request.status)).length;
+  const failedRequests = requests.filter(request => request.status === "failed").length;
+  const openTasks = tasks.filter(task => !/(done|complete|completed|cancelled)/i.test(task.status)).length;
+  const activeJobs = jobs.filter(job => job.status === "active").length;
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const activeTasks = tasks.filter(task => !/(done|complete|completed|cancelled)/i.test(task.status));
+  const recentAttributedEvents = activity.filter(event => event.agent && new Date(event.createdAt).getTime() >= recentCutoff);
+  const agentNames = Array.from(new Set([
+    ...activeTasks.map(task => task.assignee?.trim()).filter((name): name is string => Boolean(name)),
+    ...recentAttributedEvents.map(event => event.agent?.trim()).filter((name): name is string => Boolean(name)),
+  ]));
+  const workforce: WorkforceAgent[] = agentNames.map(name => ({
+    name,
+    tasks: activeTasks.filter(task => task.assignee?.trim() === name),
+    lastEvent: recentAttributedEvents.find(event => event.agent?.trim() === name) ?? null,
+  }));
 
   return (
     <>
       <div className="relative z-10 w-full mx-auto pb-16">
 
-        {/* ── Header ─────────────────────────────────────── */}
-        <div className="hq-rise pt-4 pb-10 flex flex-wrap items-end justify-between gap-6" style={rise(0)}>
-          <div>
-            <div className="eyebrow mb-2.5">{greeting()}</div>
-            <h1 className="text-[40px] font-semibold tracking-[-0.025em] leading-none text-[var(--hq-text)]">{process.env.NEXT_PUBLIC_OWNER_NAME || "Founder"}</h1>
-            <p className="num text-[var(--hq-text-ghost)] text-[12.5px] mt-3">
-              {time.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-              {"  ·  "}
-              {time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-4">
-            <div className="flex items-center gap-2.5">
-              {data.daysSincePost < 999 && (
-                <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium"
-                  style={stale
-                    ? { color: "var(--hq-warn)", borderColor: "rgba(251,191,36,0.22)", background: "rgba(251,191,36,0.07)" }
-                    : { color: "var(--hq-up)", borderColor: "rgba(52,211,153,0.22)", background: "rgba(52,211,153,0.07)" }}>
-                  <span className="num">{data.daysSincePost === 0 ? "Posted today" : `${data.daysSincePost}d since post`}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 rounded-full border border-[var(--hq-hairline)] bg-white/[0.02] px-2.5 py-1">
+        {/* ── Reserved mission banner / future hero architecture ── */}
+        <section
+          className="hq-rise relative min-h-[178px] overflow-hidden rounded-[16px] border border-[var(--line)] bg-[var(--surface-1)] px-6 py-6 sm:px-7 sm:py-6 mb-5"
+          style={rise(0)}
+        >
+          <div className="pointer-events-none absolute inset-0 opacity-50"
+            style={{ background: "radial-gradient(circle at 82% 28%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%), linear-gradient(120deg, transparent 45%, rgba(255,255,255,0.018))" }} />
+          <div className="relative h-full flex flex-col justify-between gap-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <Eyebrow>Mission control</Eyebrow>
+                <h1 className="mt-2.5 text-[34px] sm:text-[39px] font-semibold tracking-[-0.03em] leading-none text-[var(--text)]">
+                  {greeting()}, {process.env.NEXT_PUBLIC_OWNER_NAME || "Founder"}
+                </h1>
+                <p className="mt-2.5 text-[13px] text-[var(--text-2)]">Your operating picture across Hermes, its work, and the systems that need you.</p>
+              </div>
+              <Pill tone={health?.online ? "up" : health ? "down" : "neutral"}>
                 <span className="relative flex w-1.5 h-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ background: "color-mix(in srgb, var(--up) 60%, transparent)" }} />
-                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full" style={{ background: "var(--up)" }} />
+                  {health?.online && <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-[var(--up)] opacity-50" />}
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full" style={{ background: health?.online ? "var(--up)" : health ? "var(--down)" : "var(--text-3)" }} />
                 </span>
-                <span className="eyebrow !text-[9.5px] !text-[var(--hq-text-faint)]">Live</span>
+                {health ? (health.online ? "Hermes online" : "Hermes offline") : operationsLoaded ? "Hermes unavailable" : "Checking Hermes"}
+              </Pill>
+            </div>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="num text-[11.5px] text-[var(--text-3)]">
+                {time.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                {" · "}
+                {time.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+              </div>
+              <div className="flex items-center gap-4 num text-[10.5px] text-[var(--text-3)]">
+                <span>gateway <span className="text-[var(--text-2)]">{health?.gateway ?? "unknown"}</span></span>
+                <span>last seen <span className="text-[var(--text-2)]">{relativeTime(health?.lastSeen ?? null)}</span></span>
               </div>
             </div>
-            {score && <ScoreGauge score={score} />}
           </div>
+        </section>
+
+        {/* ── Operational KPI row ────────────────────────── */}
+        <section className="hq-rise mb-8" style={rise(1)}>
+          <SectionHeader label="System status" title="Operations at a glance" />
+          <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+            <OperationalMetric
+              label="Hermes"
+              value={!operationsLoaded ? "—" : health ? (health.online ? "Online" : "Offline") : "Unavailable"}
+              note={health?.lastSeen ? `Seen ${relativeTime(health.lastSeen)}` : "No heartbeat recorded"}
+              icon={<Server className="w-4 h-4" />}
+              tone={health?.online ? "up" : health ? "down" : "neutral"}
+            />
+            <OperationalMetric label="In flight" value={operationsLoaded ? runningRequests : "—"} note="Queued, approved, or running" icon={<Radio className="w-4 h-4" />} tone={runningRequests > 0 ? "accent" : "neutral"} />
+            <OperationalMetric label="Open tasks" value={operationsLoaded ? openTasks : "—"} note={`${taskTotal} total synced tasks`} icon={<CheckCircle2 className="w-4 h-4" />} tone={openTasks > 0 ? "accent" : "neutral"} />
+            <OperationalMetric label="Routines" value={operationsLoaded ? activeJobs : "—"} note={`${jobs.length} total schedules`} icon={<CalendarClock className="w-4 h-4" />} tone={activeJobs > 0 ? "up" : "neutral"} />
+            <OperationalMetric label="Needs you" value={operationsLoaded ? pendingRequests : "—"} note={failedRequests > 0 ? `${failedRequests} failed request${failedRequests === 1 ? "" : "s"}` : "Approval queue clear"} icon={<CircleAlert className="w-4 h-4" />} tone={pendingRequests > 0 || failedRequests > 0 ? "warn" : "up"} />
+          </div>
+        </section>
+
+        <div className="hq-rise mb-8" style={rise(2)}>
+          <HermesBriefing compact />
         </div>
 
-        {/* ── Platform stacks: X (with analytics) · YouTube (with video) ─ */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-          {/* X */}
-          <div className="flex flex-col gap-5 hq-rise" style={rise(1)}>
-            <MetricCard
-              label="X Followers" value={data.xFollowers} format={fmtExact}
-              delta={xd.delta} deltaPct={xd.deltaPct} deltaLabel={xd.label} trend={xd.series}
-              goal={data.xGoal} goalFormat={fmt}
-              icon={<Twitter className="w-4 h-4" />} accent="#38bdf8" href="/x" loaded={loaded}
-            />
-            <XAnalyticsPanel views={data.xViewsThisWeek} trend={xViewsSeries} totalTweets={data.totalTweets} bestDay={data.bestPostingDay} bestHour={data.bestPostingHourStr} />
+        {/* ── Workforce + live activity ──────────────────── */}
+        <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-5 items-start mb-8">
+          <div className="hq-rise" style={rise(2)}>
+            <WorkforcePanel agents={workforce} loaded={operationsLoaded} />
           </div>
-          {/* YouTube */}
-          <div className="flex flex-col gap-5 hq-rise" style={rise(2)}>
-            <MetricCard
-              label="YouTube Subscribers" value={data.ytSubscribers} format={fmtExact}
-              delta={ytd.delta} deltaPct={ytd.deltaPct} deltaLabel={ytd.label} trend={ytd.series}
-              goal={data.ytGoal} goalFormat={fmt}
-              icon={<Youtube className="w-4 h-4" />} accent="#f87171" href="/youtube" loaded={loaded}
-            />
-            {(data.topVideo || data.latestVideo) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {data.topVideo && <YouTubeCard video={data.topVideo} label="Top Performing" />}
-                {data.latestVideo && <YouTubeCard video={data.latestVideo} label="Latest" />}
-              </div>
-            )}
+          <div className="hq-rise" style={rise(3)}>
+            <ActivityFeed events={activity} loaded={operationsLoaded} />
           </div>
-        </div>
+        </section>
 
-        {/* ── Brief + Approval inbox (side-by-side on wide) ─ */}
-        <div className="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
-          <div className="xl:col-span-2 hq-rise" style={rise(5)}>
-            <HermesBriefing />
+        {/* ── Routines + approvals ───────────────────────── */}
+        <section className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-5 items-start mb-8">
+          <div className="hq-rise" style={rise(4)}>
+            <UpcomingRoutines jobs={jobs} loaded={operationsLoaded} syncedAt={cronSyncedAt} />
           </div>
-          <div className="xl:col-span-1 hq-rise" style={rise(6)}>
+          <div className="hq-rise max-h-[430px] overflow-auto pr-1" style={rise(5)}>
             <ApprovalInbox compact />
           </div>
-        </div>
+        </section>
 
-        {/* ── Signal ──────────────────────────────────────── */}
-        <div className="mt-14">
-          <SectionLabel>Signal</SectionLabel>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="hq-rise" style={rise(4)}><TopTweetsPanel tweets={data.topTweets} /></div>
-            <div className="hq-rise" style={rise(5)}><IdeasPanel sageDrafts={data.topSageDrafts} ytIdeas={data.topYoutubeIdeas} buildIdeas={data.topBuildIdeas} /></div>
-          </div>
-        </div>
-
-        {/* ── Agents strip ────────────────────────────────── */}
-        <div className="mt-14">
-          <AgentsStrip processes={data.processes} />
-        </div>
       </div>
     </>
   );
