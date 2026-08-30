@@ -59,13 +59,16 @@ Use real Hermes data rather than decorative or fake telemetry.
 Preserve existing functionality until a replacement is proven.
 
 ## Current Roadmap
-- Step 47 — Sidebar / Navigation: COMPLETE.
-- Step 48 — Dashboard Redesign: IN PROGRESS.
+- Step 47 – Sidebar / Navigation: COMPLETE + PRODUCTION.
+- Step 48 – Dashboard v1: COMPLETE + PRODUCTION + STABLE.
+- Current: Build the safe automated Codex development pipeline.
 - Next: Tasks.
 - Then: Routines.
 - Then: Agents + Activity.
-- If time remains: Sessions + Skills.
+- Then: Sessions + Skills read-only core views.
+- Calendar / Chats: refine after the operational core.
 - Do not prioritize empty Growth / Intelligence pages yet.
+- Frontend polish / final 187-inspired theme comes later.
 - After the operational core, move toward Telegram, n8n, integrations, and real automations.
 
 ## Change Safety
