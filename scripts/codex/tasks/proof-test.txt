@@ -1,0 +1,4 @@
+Create a single new file at CODEX_AUTOMATION_PROOF.md.
+The file should contain a short note saying this was created by the automated Codex pipeline proof test.
+Do not modify any other file.
+Do not commit, push, merge, deploy, or switch branches.

@@ -91,3 +91,25 @@ Before declaring coding work complete:
 4. Summarize changed files and behavior.
 5. Surface any risks, assumptions, or unresolved issues.
 6. Wait for human review before merge or production deployment.
+
+## Mission Control Context Pack
+
+For any substantial Mission Control implementation, architecture change, or page build, read the repository-local context pack before editing:
+
+`docs/codex-context/README.md`
+
+Then read the relevant files in:
+
+`docs/codex-context/`
+
+The context pack contains:
+- architecture and host-vs-Docker boundaries
+- protected production systems
+- real Hermes APIs and known scaffolding
+- page-by-page product requirements
+- August 29 visual-reference guidance
+- current roadmap and unattended-development workflow
+
+If documentation conflicts with the current repository or verified production behavior, inspect first and treat current working code/production behavior as the higher-confidence source.
+
+Do not use the context pack as permission to weaken any safety rule in this file.
