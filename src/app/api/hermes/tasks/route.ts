@@ -5,6 +5,9 @@ export async function GET() {
   const tasks = await prisma.hermesTask.findMany({ orderBy: [{ status: "asc" }, { priority: "desc" }], take: 200 });
   const counts: Record<string, number> = {};
   for (const t of tasks) counts[t.status] = (counts[t.status] || 0) + 1;
-  const lastSync = tasks[0]?.syncedAt ?? null;
+  const lastSync = tasks.reduce<Date | null>(
+    (latest, task) => (!latest || task.syncedAt > latest ? task.syncedAt : latest),
+    null
+  );
   return NextResponse.json({ tasks, counts, total: tasks.length, lastSync });
 }
