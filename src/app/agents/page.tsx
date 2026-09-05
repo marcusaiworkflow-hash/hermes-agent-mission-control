@@ -1,393 +1,58 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import OfficeView from "@/components/OfficeView";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, AlertTriangle, Bot, BrainCircuit, Clock3, Gauge, RefreshCw, TerminalSquare, Unplug } from "lucide-react";
+import { Panel, Pill, Skeleton, rise } from "@/components/ui/kit";
+import { formatCompact, formatUsd, HermesInsights, normalizeInsights } from "@/lib/hermes-insights";
 
-interface AgentActivity {
-  timestamp: string;
-  action: string;
-  result?: string;
-}
-
-interface Agent {
-  id: string;
-  name: string;
-  emoji: string;
-  role: string;
-  status: "idle" | "working" | "error" | "offline";
-  currentTask?: string;
-  lastActive?: string;
-  tasksCompleted: number;
-  totalCost: number;
-  recentActivity: AgentActivity[];
-}
-
-const statusConfig: Record<string, { color: string; dot: string; label: string; pulse?: boolean }> = {
-  idle: { color: "var(--warn)", dot: "var(--warn)", label: "Idle" },
-  working: { color: "var(--accent)", dot: "var(--accent)", label: "Working", pulse: true },
-  error: { color: "var(--down)", dot: "var(--down)", label: "Error" },
-  offline: { color: "var(--text-3)", dot: "var(--text-4)", label: "Offline" },
-  online: { color: "var(--up)", dot: "var(--up)", label: "Online", pulse: true },
-  active: { color: "var(--up)", dot: "var(--up)", label: "Active", pulse: true },
-  mixed: { color: "var(--warn)", dot: "var(--warn)", label: "Partial" },
-};
-
-const roleColors: Record<string, string> = {
-  max: "from-amber-500/20 to-amber-600/5 border-amber-500/20",
-  sage: "from-sky-500/20 to-sky-600/5 border-sky-500/20",
-  knox: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
-  nova: "from-purple-500/20 to-purple-600/5 border-purple-500/20",
-  pixel: "from-blue-500/20 to-blue-600/5 border-blue-500/20",
-};
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function AgentCard({ agent, isExpanded, onToggle }: { agent: Agent; isExpanded: boolean; onToggle: () => void }) {
-  const status = statusConfig[agent.status] || statusConfig.offline;
-
-  return (
-    <div className="panel panel-interactive overflow-hidden">
-      {/* Main card */}
-      <div className="p-5 cursor-pointer" onClick={onToggle}>
-        <div className="flex items-start gap-3.5">
-          {/* Avatar */}
-          <div className="w-12 h-12 rounded-[var(--r-md)] flex items-center justify-center text-2xl shrink-0"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
-            {agent.emoji}
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="relative flex w-2 h-2 shrink-0">
-                {status.pulse && <span className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping" style={{ background: status.dot }} />}
-                <span className="relative inline-flex w-2 h-2 rounded-full" style={{ background: status.dot }} />
-              </span>
-              <h3 className="text-[14px] font-semibold text-[var(--text)]">{agent.name}</h3>
-              <span className="text-[10px] font-medium" style={{ color: status.color }}>{status.label}</span>
-            </div>
-            <p className="text-[12px] text-[var(--text-3)] mt-1">{agent.role}</p>
-
-            {/* Current task */}
-            {agent.currentTask && agent.status === "working" && (
-              <p className="text-[12px] mt-2 truncate" style={{ color: "var(--accent)" }}>{agent.currentTask}</p>
-            )}
-          </div>
-
-          {/* Stats */}
-          <div className="text-right shrink-0">
-            <div className="num text-[22px] font-semibold text-[var(--text)] leading-none">{agent.tasksCompleted}</div>
-            <div className="eyebrow mt-1.5">tasks</div>
-            {agent.lastActive && (
-              <div className="num text-[10px] text-[var(--text-4)] mt-1">{timeAgo(agent.lastActive)}</div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded activity feed */}
-      {isExpanded && (
-        <div className="px-5 py-4 space-y-2.5" style={{ borderTop: "1px solid var(--line)" }}>
-          <h4 className="eyebrow">Recent Activity</h4>
-          {agent.recentActivity.length === 0 ? (
-            <p className="text-[12px] text-[var(--text-3)] py-2">No activity yet</p>
-          ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {agent.recentActivity.slice(0, 10).map((activity, i) => (
-                <div key={i} className="flex items-start gap-2.5 text-[12px]">
-                  <span className="num text-[var(--text-4)] shrink-0 w-14">{timeAgo(activity.timestamp)}</span>
-                  <span className="text-[var(--text-2)]">{activity.action}</span>
-                  {activity.result && (
-                    <span className="text-[var(--text-3)] ml-auto truncate max-w-[200px]">{activity.result}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Live Agent Chat ───────────────────────────────────────
-function AgentChat({ agent, onClose }: { agent: Agent; onClose: () => void }) {
-  const [input, setInput] = useState("");
-  const [msgs, setMsgs] = useState<{ role: "user"|"assistant"; content: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
-
-  async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
-    setInput("");
-    const newMsgs = [...msgs, { role: "user" as const, content: text }];
-    setMsgs(newMsgs);
-    setLoading(true);
-    try {
-      const r = await fetch("/api/agent-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: agent.id, message: text, history: msgs }),
-      });
-      const d = await r.json() as { reply: string };
-      setMsgs([...newMsgs, { role: "assistant", content: d.reply }]);
-    } catch {
-      setMsgs([...newMsgs, { role: "assistant", content: "Sorry, something went wrong. Try again." }]);
-    }
-    setLoading(false);
-  }
-
-  const agentColor = roleColors[agent.id]?.split(" ")[0]?.replace("from-","text-")?.replace("/20","") || "text-[var(--text-3)]";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="elevated w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--line)" }}>
-          <div className="text-2xl">{agent.emoji}</div>
-          <div>
-            <div className="text-[14px] font-semibold text-[var(--text)]">{agent.name}</div>
-            <div className="text-[12px] text-[var(--text-3)]">{agent.role}</div>
-          </div>
-          <button onClick={onClose} className="ml-auto text-[var(--text-3)] hover:text-[var(--text)] transition-colors text-xl leading-none">×</button>
-        </div>
-        {/* Messages */}
-        <div className="h-80 overflow-y-auto p-4 space-y-3 flex flex-col" style={{ background: "var(--surface-1)" }}>
-          {msgs.length === 0 && (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-[var(--text-3)] text-[13px] text-center">Ask {agent.name} anything.<br/>They&apos;re ready.</p>
-            </div>
-          )}
-          {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-[80%] rounded-[var(--r-md)] px-3.5 py-2 text-[13px] leading-relaxed"
-                style={m.role === "user"
-                  ? { background: "var(--surface-3)", color: "var(--text)" }
-                  : { background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text-2)" }}>
-                {m.role === "assistant" && <span className="text-xs mr-1">{agent.emoji}</span>}
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="rounded-[var(--r-md)] px-3.5 py-2" style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
-                <span className="text-[var(--text-3)] text-[13px]">{agent.emoji} thinking…</span>
-              </div>
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
-        {/* Input */}
-        <div className="flex gap-2 p-3" style={{ borderTop: "1px solid var(--line)" }}>
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-            placeholder={`Message ${agent.name}…`}
-            className="flex-1 rounded-full px-4 py-2 text-[13px] text-[var(--text)] focus:outline-none transition-colors"
-            style={{ background: "var(--surface-1)", border: "1px solid var(--line)" }}
-          />
-          <button
-            onClick={send}
-            disabled={!input.trim() || loading}
-            className="btn-primary px-4 py-2 text-[13px]"
-          >Send</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+type AgentEvent = { id: string; kind: string; title: string; detail: string | null; agent: string; level: string; createdAt: string };
+type Health = { online?: boolean; gateway?: string; detail?: string; lastSeen?: string | null };
+type WorkforceAgent = { initials: string; name: string; role: string; description: string };
+const WORKFORCE: WorkforceAgent[] = [
+  { initials: "CS", name: "Chief of Staff", role: "Orchestration", description: "Priorities, approvals, work routing, and operational summaries." },
+  { initials: "RI", name: "Research & Intel", role: "Intelligence", description: "Deep research, market and prospect intelligence, competitive analysis, and opportunity discovery." },
+  { initials: "PO", name: "Prospect & Outreach", role: "Growth operations", description: "Lead sourcing, enrichment, scoring, personalization, outbound, and follow-up." },
+  { initials: "DA", name: "Dev & Automation", role: "Engineering", description: "n8n workflows, APIs, integrations, scrapers, apps, automation, and internal tooling." },
+  { initials: "CX", name: "Client Success", role: "Delivery", description: "Onboarding, implementation coordination, support, documentation, and retention." },
+  { initials: "CM", name: "Content & Media", role: "Production", description: "Content intelligence, extraction, scripting, repurposing, research, and production support." },
+];
+function parseDate(value: string | null | undefined) { if (!value) return null; const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date; }
+function timeAgo(value: string | null | undefined) { const date = parseDate(value); if (!date) return "—"; const seconds = Math.round((date.getTime() - Date.now()) / 1000); const f = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }); if (Math.abs(seconds) < 60) return f.format(seconds, "second"); const minutes = Math.round(seconds / 60); if (Math.abs(minutes) < 60) return f.format(minutes, "minute"); const hours = Math.round(minutes / 60); return Math.abs(hours) < 48 ? f.format(hours, "hour") : f.format(Math.round(hours / 24), "day"); }
+function stamp(value: string) { const date = parseDate(value); return date ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date) : "—"; }
+function label(value: string) { return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function levelTone(level: string): "neutral" | "up" | "down" | "warn" | "accent" { const value = level.toLowerCase(); if (["error", "down", "failed", "critical"].some((part) => value.includes(part))) return "down"; if (["warn", "attention"].some((part) => value.includes(part))) return "warn"; if (["up", "success", "online"].some((part) => value.includes(part))) return "up"; if (["run", "active"].some((part) => value.includes(part))) return "accent"; return "neutral"; }
+async function getJSON<T>(url: string): Promise<T> { const response = await fetch(url, { cache: "no-store" }); if (!response.ok) throw new Error(`Request failed (${response.status})`); return response.json() as Promise<T>; }
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
-  const [view, setView] = useState<"cards" | "office">("office");
-  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
-
-  const loadAgents = useCallback(async () => {
-    try {
-      const res = await fetch("/api/agents");
-      const data = await res.json();
-      setAgents(Array.isArray(data) ? data : []);
-    } catch {}
-    setLoading(false);
+  const [health, setHealth] = useState<Health | null>(null); const [insights, setInsights] = useState<HermesInsights | null>(null); const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshing(true); else setLoading(true);
+    setError(null);
+    const results = await Promise.allSettled([getJSON<Health>("/api/hermes/health"), getJSON<HermesInsights>("/api/hermes/cost"), getJSON<{ events: AgentEvent[] }>("/api/hermes/activity?take=20")]);
+    if (results[0].status === "fulfilled") setHealth(results[0].value); if (results[1].status === "fulfilled") setInsights(normalizeInsights(results[1].value)); if (results[2].status === "fulfilled") setEvents(results[2].value.events ?? []);
+    if (results.every((result) => result.status === "rejected")) setError("Hermes telemetry is currently unavailable."); setLoading(false); setRefreshing(false);
   }, []);
+  useEffect(() => { const frame = requestAnimationFrame(() => { void load(); }); return () => cancelAnimationFrame(frame); }, [load]);
+  const models = insights?.byModel ?? []; const magnitude = (model: (typeof models)[number]) => model.tokens ?? model.cost ?? model.calls ?? 0; const modelMax = Math.max(1, ...models.map(magnitude));
+  const usageAvailable = insights && [insights.totalTokens, insights.sessions, insights.messages, insights.toolCalls, insights.inputTokens, insights.outputTokens].some((value) => value != null);
+  const activityPatterns = insights?.activityPatterns ?? []; const activeDays = useMemo(() => new Set(events.map((event) => parseDate(event.createdAt)?.toLocaleDateString()).filter(Boolean)).size, [events]);
 
-  useEffect(() => {
-    loadAgents();
-    const interval = setInterval(loadAgents, 10000); // poll every 10s
-    return () => clearInterval(interval);
-  }, [loadAgents]);
-
-  if (loading) {
-    return (
-      <div className="relative min-h-screen p-8">
-        <div className="relative z-10 w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="sk h-32 rounded-[var(--r-lg)]" />)}
-        </div>
-      </div>
-    );
-  }
-
-  const maxAgent = agents.find(a => a.id === "max");
-  const teamAgents = agents.filter(a => a.id !== "max");
-  const online = agents.filter(a => a.status !== "offline").length;
-  const working = agents.filter(a => a.status === "working").length;
-  const totalTasks = agents.reduce((sum, a) => sum + a.tasksCompleted, 0);
-
-  return (
-    <>
-      <div className="relative z-10 w-full mx-auto text-[var(--text)] p-8 pb-16 space-y-8">
-      {/* Header */}
-      <div className="hq-rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="eyebrow mb-2.5">Agent HQ</div>
-          <h1 className="text-[32px] font-semibold tracking-[-0.025em] leading-none text-[var(--text)]">Your AI Team</h1>
-          <p className="text-[13px] text-[var(--text-3)] mt-3">Working 24/7</p>
-        </div>
-        <div className="flex items-center gap-6">
-          {/* Stats */}
-          <div className="flex gap-7 text-center">
-            <div>
-              <div className="num text-[22px] font-semibold leading-none" style={{ color: "var(--up)" }}>{online}<span className="text-[var(--text-4)]">/{agents.length}</span></div>
-              <div className="eyebrow mt-1.5">Online</div>
-            </div>
-            <div>
-              <div className="num text-[22px] font-semibold leading-none" style={{ color: "var(--accent)" }}>{working}</div>
-              <div className="eyebrow mt-1.5">Working</div>
-            </div>
-            <div>
-              <div className="num text-[22px] font-semibold leading-none text-[var(--text)]">{totalTasks}</div>
-              <div className="eyebrow mt-1.5">Total Tasks</div>
-            </div>
-          </div>
-          {/* View toggle */}
-          <div className="flex rounded-full p-1 gap-1" style={{ border: "1px solid var(--line)" }}>
-            <button
-              onClick={() => setView("office")}
-              className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                view === "office"
-                  ? "bg-white/[0.08] text-[var(--text)]"
-                  : "text-[var(--text-3)] hover:text-[var(--text-2)]"
-              }`}
-            >
-              Office
-            </button>
-            <button
-              onClick={() => setView("cards")}
-              className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                view === "cards"
-                  ? "bg-white/[0.08] text-[var(--text)]"
-                  : "text-[var(--text-3)] hover:text-[var(--text-2)]"
-              }`}
-            >
-              Cards
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Live Agent Chat Modal */}
-      {chatAgent && <AgentChat agent={chatAgent} onClose={() => setChatAgent(null)} />}
-
-      {/* Office View */}
-      {view === "office" && (
-        <>
-          <OfficeView agents={agents} />
-          {/* Chat quick-launch strip */}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {agents.filter(a => a.id !== "max").map(a => (
-              <button key={a.id} onClick={() => setChatAgent(a)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] text-[var(--text-2)] transition-colors panel-interactive"
-                style={{ background: "var(--surface-1)", border: "1px solid var(--line)" }}>
-                <span>{a.emoji}</span> Chat with {a.name}
-              </button>
-            ))}
-            {agents.find(a => a.id === "max") && (
-              <button onClick={() => setChatAgent(agents.find(a => a.id === "max")!)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] transition-colors"
-                style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)" }}>
-                🐺 Chat with Max
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Cards View */}
-      {view === "cards" && (
-        <>
-          {/* Chief of Staff (Max) — full width */}
-          {maxAgent && (
-            <AgentCard
-              agent={maxAgent}
-              isExpanded={expandedAgent === maxAgent.id}
-              onToggle={() => setExpandedAgent(expandedAgent === maxAgent.id ? null : maxAgent.id)}
-            />
-          )}
-
-          {/* Team grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teamAgents.map(agent => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                isExpanded={expandedAgent === agent.id}
-                onToggle={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
-              />
-            ))}
-          </div>
-
-          {/* Org chart visual */}
-          <div className="pt-6" style={{ borderTop: "1px solid var(--line)" }}>
-            <div className="eyebrow mb-5">Team Structure</div>
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2.5 rounded-[var(--r-md)] px-4 py-2.5"
-                style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 24%, transparent)" }}>
-                <span className="text-xl">🐺</span>
-                <div>
-                  <div className="text-[13px] font-semibold text-[var(--text)]">Max</div>
-                  <div className="text-[10px] text-[var(--text-3)]">Chief of Staff · Orchestrator</div>
-                </div>
-              </div>
-              <div className="w-px h-6" style={{ background: "var(--line-strong)" }} />
-              <div className="flex items-center gap-0">
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-                <div className="w-px h-4" style={{ background: "var(--line-strong)" }} />
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-                <div className="w-px h-4" style={{ background: "var(--line-strong)" }} />
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-              </div>
-              <div className="flex flex-wrap justify-center gap-3">
-                {teamAgents.map(agent => (
-                  <div key={agent.id} className="flex items-center gap-2.5 rounded-[var(--r-md)] px-3.5 py-2.5"
-                    style={{ background: "var(--surface-1)", border: "1px solid var(--line)", opacity: agent.status === "offline" ? 0.5 : 1 }}>
-                    <span className="text-lg">{agent.emoji}</span>
-                    <div>
-                      <div className="text-[12px] font-semibold text-[var(--text)]">{agent.name}</div>
-                      <div className="text-[10px] text-[var(--text-3)]">{agent.role}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-      </div>
-    </>
-  );
+  return <div className="relative z-10 w-full space-y-9 pb-16 pt-1">
+    <header className="hq-rise overflow-hidden rounded-[var(--r-lg)] border border-[var(--line)] bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent)_12%,var(--surface-1)),var(--surface-1)_48%,color-mix(in_srgb,#8b5cf6_8%,var(--surface-1)))] p-5 sm:p-7" style={rise(0)}><div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between"><div className="max-w-2xl"><div className="eyebrow mb-3">Fleet overview · product roster</div><h1 className="text-[32px] font-semibold leading-[1.05] tracking-[-0.035em] text-[var(--text)] sm:text-[40px]">Your AI workforce. One console.</h1><p className="mt-3 max-w-xl text-[13px] leading-relaxed text-[var(--text-2)]">Inspect Hermes operations today and prepare a permanent fleet for routing, monitoring, and review as each specialist runtime comes online.</p></div><div className="grid grid-cols-2 gap-x-7 gap-y-5 sm:grid-cols-4 lg:min-w-[470px]"><HeroMetric label="Planned agents" value="6" note="Product roster" /><HeroMetric label="Hermes runtime" value={loading ? "…" : health?.online ? "Online" : "Offline"} note={health?.lastSeen ? `Seen ${timeAgo(health.lastSeen)}` : "Health source"} tone={health?.online ? "up" : "neutral"} /><HeroMetric label="7-day sessions" value={loading ? "…" : formatCompact(insights?.sessions)} note="Hermes Insights" /><HeroMetric label="7-day tokens" value={loading ? "…" : formatCompact(insights?.totalTokens)} note="Hermes Insights" /></div></div></header>
+    {error && <Panel className="flex items-center justify-between gap-4 p-4"><div className="flex items-center gap-2 text-[13px] text-[var(--down)]"><AlertTriangle className="h-4 w-4" />{error}</div><button onClick={() => void load(true)} className="btn-ghost px-3 py-1.5 text-[12px]">Retry</button></Panel>}
+    <section className="hq-rise" style={rise(70)}><SectionTitle eyebrow="Workforce architecture" title="Planned specialist fleet" note="These identities describe the intended product roster. They are not connected runtimes or historical event attribution." /><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{WORKFORCE.map((agent) => <PlannedAgentCard key={agent.name} agent={agent} />)}</div></section>
+    <section className="hq-rise" style={rise(120)}><SectionTitle eyebrow="Inference ledger" title="Hermes model routing" note="Aggregate 7-day usage from Hermes Insights. This is runtime-wide telemetry, not per-agent performance." action={<button onClick={() => void load(true)} disabled={refreshing} className="btn-ghost flex items-center gap-2 px-3 py-1.5 text-[12px]"><RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />Refresh</button>} />
+      {loading ? <Skeleton className="mt-4 h-64" /> : <Panel className="mt-4 overflow-hidden"><div className="grid lg:grid-cols-[0.78fr_1.22fr]"><div className="border-b border-[var(--line)] p-5 sm:p-6 lg:border-b-0 lg:border-r"><div className="eyebrow">Aggregate usage</div><div className="num mt-4 text-[38px] font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-[48px]">{formatCompact(insights?.totalTokens)}</div><div className="mt-1 text-[12px] text-[var(--text-3)]">total tokens · current Insights window</div><div className="mt-7 grid grid-cols-2 gap-4"><SmallMetric label="Sessions" value={insights?.sessions} /><SmallMetric label="Messages" value={insights?.messages} /><SmallMetric label="Tool calls" value={insights?.toolCalls} /><SmallMetric label="Input / output" value={insights?.inputTokens != null || insights?.outputTokens != null ? `${formatCompact(insights?.inputTokens)} / ${formatCompact(insights?.outputTokens)}` : undefined} /></div>{!usageAvailable && <Unavailable icon={<Gauge className="h-4 w-4" />} text="Structured usage metrics are not present in the latest Insights payload." />}</div>
+        <div className="p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><div className="eyebrow">Model routing</div><p className="mt-1 text-[12px] text-[var(--text-3)]">Relative magnitude uses tokens, then cost, then calls.</p></div><BrainCircuit className="h-5 w-5 text-[var(--text-4)]" /></div>{models.length ? <div className="mt-6 space-y-5">{models.map((model) => { const value = magnitude(model); const pct = Math.max(value ? 4 : 0, Math.round(value / modelMax * 100)); const display = model.tokens != null ? `${formatCompact(model.tokens)} tokens` : model.cost != null ? formatUsd(model.cost) : model.calls != null ? `${formatCompact(model.calls)} calls` : "Magnitude unavailable"; return <div key={model.model}><div className="mb-2 flex items-center justify-between gap-4"><span className="truncate text-[13px] font-medium text-[var(--text)]">{model.model}</span><span className="num shrink-0 text-[11.5px] text-[var(--text-3)]">{display}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${pct}%` }} /></div></div>})}</div> : <Unavailable icon={<BrainCircuit className="h-4 w-4" />} text="No model-level rows were available in the latest Hermes Insights payload." />}</div></div></Panel>}
+    </section>
+    <section className="hq-rise" style={rise(170)}><SectionTitle eyebrow="Activity rhythm" title="Execution patterns" note="Only genuine Insights summaries are shown; sparse events are not expanded into synthetic hourly cells." /><Panel className="mt-4 p-5 sm:p-6"><div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]"><div className="grid grid-cols-2 gap-4"><SmallMetric label="Peak hour" value={insights?.peakHour ?? undefined} /><SmallMetric label="Active days loaded" value={activeDays} /><SmallMetric label="Events loaded" value={events.length} /><SmallMetric label="Insights synced" value={insights?.syncedAt ? timeAgo(insights.syncedAt) : undefined} /></div><div className="rounded-[var(--r-md)] border border-dashed border-[var(--line-strong)] bg-[color-mix(in_srgb,var(--surface-2)_55%,transparent)] p-5">{activityPatterns.length ? <><div className="flex items-center gap-2 text-[13px] font-medium text-[var(--text)]"><Activity className="h-4 w-4 text-[var(--accent)]" />Available activity patterns</div><div className="mt-4 grid gap-2 sm:grid-cols-2">{activityPatterns.map((pattern) => <div key={pattern.label} className="flex items-center justify-between rounded-lg bg-[var(--surface-1)] px-3 py-2"><span className="text-[12px] text-[var(--text-2)]">{pattern.label}</span><span className="num text-[12px] text-[var(--text)]">{formatCompact(pattern.value)}</span></div>)}</div></> : <><div className="flex items-center gap-2 text-[13px] font-medium text-[var(--text)]"><Clock3 className="h-4 w-4 text-[var(--accent)]" />Heatmap instrumentation pending</div><p className="mt-2 max-w-xl text-[12.5px] leading-relaxed text-[var(--text-3)]">The current sources do not expose a complete 7-day × hourly execution series. Richer timestamped session or agent-run buckets are required before a truthful heatmap can be rendered.</p></>}</div></div></Panel></section>
+    <section className="hq-rise" style={rise(220)}><SectionTitle eyebrow="Audit trail" title="Recent agent logs" note="Real AgentEvent records. Current Hermes attribution is preserved as stored." />{loading ? <Skeleton className="mt-4 h-56" /> : <EventTable events={events} />}</section>
+  </div>;
 }
+function HeroMetric({ label, value, note, tone = "default" }: { label: string; value: string; note: string; tone?: "default" | "up" | "neutral" }) { return <div><div className={`num text-[20px] font-semibold ${tone === "up" ? "text-[var(--up)]" : tone === "neutral" ? "text-[var(--text-2)]" : "text-[var(--text)]"}`}>{value}</div><div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-3)]">{label}</div><div className="mt-1 text-[10.5px] text-[var(--text-4)]">{note}</div></div>; }
+function SectionTitle({ eyebrow, title, note, action }: { eyebrow: string; title: string; note: string; action?: React.ReactNode }) { return <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="eyebrow">{eyebrow}</div><h2 className="mt-1.5 text-[22px] font-semibold tracking-[-0.025em] text-[var(--text)]">{title}</h2><p className="mt-1 max-w-2xl text-[12px] text-[var(--text-3)]">{note}</p></div>{action}</div>; }
+function PlannedAgentCard({ agent }: { agent: WorkforceAgent }) { return <Panel className="panel-interactive flex min-h-[218px] flex-col p-5"><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-3"><div className="num flex h-10 w-10 items-center justify-center rounded-[10px] border border-[color-mix(in_srgb,var(--accent)_25%,var(--line))] bg-[color-mix(in_srgb,var(--accent)_9%,transparent)] text-[12px] font-semibold text-[var(--accent)]">{agent.initials}</div><div><h3 className="text-[14px] font-semibold text-[var(--text)]">{agent.name}</h3><p className="mt-0.5 text-[11.5px] text-[var(--text-3)]">{agent.role}</p></div></div><Pill tone="neutral" className="uppercase tracking-[0.08em]">Planned</Pill></div><p className="mt-5 text-[12.5px] leading-relaxed text-[var(--text-2)]">{agent.description}</p><div className="mt-auto grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4"><div className="flex items-center gap-2 text-[11.5px] text-[var(--text-3)]"><Unplug className="h-3.5 w-3.5" />Not connected</div><div className="flex items-center justify-end gap-2 text-[11.5px] text-[var(--text-3)]"><Bot className="h-3.5 w-3.5" />Runtime unassigned</div></div></Panel>; }
+function SmallMetric({ label, value }: { label: string; value: number | string | null | undefined }) { return <div><div className="eyebrow !text-[9.5px]">{label}</div><div className="num mt-2 text-[17px] font-medium text-[var(--text)]">{typeof value === "number" ? formatCompact(value) : value ?? "—"}</div></div>; }
+function Unavailable({ icon, text }: { icon: React.ReactNode; text: string }) { return <div className="mt-6 flex items-start gap-2 rounded-lg border border-dashed border-[var(--line-strong)] p-3 text-[12px] leading-relaxed text-[var(--text-3)]">{icon}<span>{text}</span></div>; }
+function EventTable({ events }: { events: AgentEvent[] }) { if (!events.length) return <Panel className="mt-4 flex min-h-44 flex-col items-center justify-center p-6 text-center"><TerminalSquare className="h-5 w-5 text-[var(--text-3)]" /><p className="mt-3 text-[13px] text-[var(--text-2)]">No AgentEvent records are available.</p><p className="mt-1 text-[12px] text-[var(--text-3)]">Bridge and Hermes activity will appear here when recorded.</p></Panel>; return <Panel className="mt-4 overflow-hidden"><div className="hidden grid-cols-[140px_110px_minmax(250px,1fr)_90px_90px] gap-4 border-b border-[var(--line)] px-4 py-2.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[var(--text-4)] md:grid"><span>Time</span><span>Agent</span><span>Event</span><span>Type</span><span>Status</span></div><div className="divide-y divide-[var(--line)]">{events.map((event) => <div key={event.id} className="grid gap-2 px-4 py-3 transition-colors hover:bg-[var(--surface-2)] md:grid-cols-[140px_110px_minmax(250px,1fr)_90px_90px] md:items-center md:gap-4"><div className="num text-[11px] text-[var(--text-3)]">{stamp(event.createdAt)}</div><div className="truncate text-[12px] text-[var(--text-2)]">{event.agent || "Unattributed"}</div><div className="min-w-0"><div className="truncate text-[12.5px] font-medium text-[var(--text)]">{event.title}</div>{event.detail && <div className="mt-0.5 truncate text-[11px] text-[var(--text-3)]">{event.detail}</div>}</div><div className="text-[11px] text-[var(--text-3)]">{label(event.kind)}</div><div><Pill tone={levelTone(event.level)} className="!px-2 !py-0.5 !text-[10px]">{label(event.level)}</Pill></div></div>)}</div></Panel>; }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, ChevronRight, Gauge } from "lucide-react";
 import { Panel, SectionHeader, Pill, EmptyState, Eyebrow } from "@/components/ui/kit";
+import { formatCompact, formatUsd, HermesInsights, ModelUsage, normalizeInsights } from "@/lib/hermes-insights";
 
 // ── Types ─────────────────────────────────────────────────
 type RunStatus =
@@ -27,21 +28,6 @@ interface Req {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
-}
-
-interface ModelUsage {
-  model: string;
-  tokens?: number;
-  cost?: number;
-  calls?: number;
-}
-
-interface Cost {
-  summary?: string | null;
-  byModel?: ModelUsage[];
-  totalCost?: number | null;
-  totalTokens?: number | null;
-  syncedAt?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -69,18 +55,6 @@ function duration(start: string | null, finish: string | null): string {
   const m = Math.floor(totalS / 60);
   const s = totalS % 60;
   return `${m}m ${String(s).padStart(2, "0")}s`;
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
-  return n.toLocaleString("en-US");
-}
-function fmtUsd(n: number): string {
-  return `$${n.toLocaleString("en-US", {
-    minimumFractionDigits: n < 100 ? 2 : 0,
-    maximumFractionDigits: n < 100 ? 2 : 0,
-  })}`;
 }
 
 async function getJSON<T>(url: string): Promise<T | null> {
@@ -152,7 +126,7 @@ function StatusDot({ status, reduce }: { status: RunStatus; reduce: boolean }) {
 }
 
 // ── Usage strip ───────────────────────────────────────────
-function UsageStrip({ cost }: { cost: Cost | null }) {
+function UsageStrip({ cost }: { cost: HermesInsights | null }) {
   const byModel = cost?.byModel ?? [];
   const hasAny =
     !!cost &&
@@ -182,13 +156,13 @@ function UsageStrip({ cost }: { cost: Cost | null }) {
         <div>
           <Eyebrow>Total cost</Eyebrow>
           <div className="num font-semibold text-[26px] tracking-[-0.02em] text-[var(--text)] leading-none mt-2">
-            {cost?.totalCost != null ? fmtUsd(cost.totalCost) : "—"}
+            {cost?.totalCost != null ? formatUsd(cost.totalCost) : "—"}
           </div>
         </div>
         <div>
           <Eyebrow>Total tokens</Eyebrow>
           <div className="num font-semibold text-[26px] tracking-[-0.02em] text-[var(--text)] leading-none mt-2">
-            {cost?.totalTokens != null ? fmtTokens(cost.totalTokens) : "—"}
+            {cost?.totalTokens != null ? formatCompact(cost.totalTokens) : "—"}
           </div>
         </div>
         <div>
@@ -227,9 +201,9 @@ function UsageStrip({ cost }: { cost: Cost | null }) {
                 </div>
                 <span className="num text-[11px] text-[var(--text-3)] shrink-0 w-24 text-right">
                   {m.tokens != null
-                    ? `${fmtTokens(m.tokens)} tok`
+                    ? `${formatCompact(m.tokens)} tok`
                     : m.cost != null
-                      ? fmtUsd(m.cost)
+                      ? formatUsd(m.cost)
                       : m.calls != null
                         ? `${m.calls} calls`
                         : "—"}
@@ -380,7 +354,7 @@ function RunHistory({
 // ── Main ──────────────────────────────────────────────────
 export function HermesRuns() {
   const [runs, setRuns] = useState<Req[]>([]);
-  const [cost, setCost] = useState<Cost | null>(null);
+  const [cost, setCost] = useState<HermesInsights | null>(null);
   const [loaded, setLoaded] = useState(false);
   const reduce = usePrefersReducedMotion();
   const mounted = useRef(true);
@@ -388,20 +362,21 @@ export function HermesRuns() {
   const load = useCallback(async () => {
     const [reqs, c] = await Promise.all([
       getJSON<{ requests: Req[]; pending: number }>("/api/hermes/requests?take=60"),
-      getJSON<Cost>("/api/hermes/cost"),
+      getJSON<HermesInsights>("/api/hermes/cost"),
     ]);
     if (!mounted.current) return;
     if (reqs) setRuns(reqs.requests ?? []);
-    if (c) setCost(c);
+    if (c) setCost(normalizeInsights(c));
     setLoaded(true);
   }, []);
 
   useEffect(() => {
     mounted.current = true;
-    load();
+    const frame = requestAnimationFrame(() => { void load(); });
     const iv = setInterval(load, 8000);
     return () => {
       mounted.current = false;
+      cancelAnimationFrame(frame);
       clearInterval(iv);
     };
   }, [load]);
