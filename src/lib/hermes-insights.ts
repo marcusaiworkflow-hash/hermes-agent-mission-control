@@ -28,13 +28,43 @@ function section(summary: string, heading: string): string {
   for (const line of lines.slice(start + 1)) { if (/^\s*(?:#{1,4}\s+|[A-Z][A-Z /&-]{3,}:?\s*)$/.test(line) && selected.some((entry) => entry.trim())) break; selected.push(line); }
   return selected.join("\n");
 }
+function cleanLine(value: string): string {
+  return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/[*_`]/g, "").trim();
+}
+function tableCells(line: string): string[] {
+  const clean = cleanLine(line).replace(/^\s*[-*•]\s*/, "");
+  if (/[|│┃]/.test(clean)) return clean.split(/[|│┃]/).map((cell) => cell.trim()).filter(Boolean);
+  return clean.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
+}
+function tableMetric(cell: string | undefined, kind: "tokens" | "cost" | "calls"): number | null {
+  if (!cell) return null;
+  if (kind === "cost") return numeric(cell.match(/\$\s*([\d,.]+(?:\.\d+)?(?:[kKmMbB])?)/)?.[1]);
+  return numeric(cell.match(/([\d,.]+(?:\.\d+)?(?:[kKmMbB])?)/)?.[1]);
+}
 function parseModels(summary: string): ModelUsage[] {
-  const body = section(summary, "model usage"); if (!body) return []; const rows = new Map<string, ModelUsage>();
-  for (const raw of body.split(/\r?\n/)) {
-    const line = raw.replace(/^\s*[-*•]\s*/, "").trim(); if (!line || /^model\s+/i.test(line)) continue;
-    const match = line.match(/(?:`([^`]+)`|([\w.-]+(?:\s+[\w.-]+)*?))\s*(?::|\||—|-)/); const name = match?.[1] ?? match?.[2];
-    if (!name || !/(?:gpt|claude|gemini|llama|mistral|o\d)/i.test(name)) continue;
+  const body = section(summary, "model usage"); if (!body) return [];
+  const lines = body.split(/\r?\n/); const rows = new Map<string, ModelUsage>();
+  const headerIndex = lines.findIndex((line) => tableCells(line).some((cell) => /^model$/i.test(cell)));
+  if (headerIndex >= 0) {
+    const headers = tableCells(lines[headerIndex]).map((cell) => cell.toLowerCase());
+    const modelIndex = headers.findIndex((cell) => cell === "model");
+    const totalTokensIndex = headers.findIndex((cell) => /(?:total.*tokens?|tokens?.*total|^tokens?$|^tok(?:ens?)?$)/i.test(cell));
+    const costIndex = headers.findIndex((cell) => /cost|spend/i.test(cell));
+    const callsIndex = headers.findIndex((cell) => /calls?|requests?/i.test(cell));
+    for (const raw of lines.slice(headerIndex + 1)) {
+      const cells = tableCells(raw); const name = cells[modelIndex]?.trim();
+      if (!name || /^(?:model|total)$/i.test(name) || /^[\s─━═-]+$/.test(name)) continue;
+      const tokens = tableMetric(cells[totalTokensIndex], "tokens"); const cost = tableMetric(cells[costIndex], "cost"); const calls = tableMetric(cells[callsIndex], "calls");
+      if (tokens == null && cost == null && calls == null) continue;
+      rows.set(name, { model: name, ...(tokens != null ? { tokens } : {}), ...(cost != null ? { cost } : {}), ...(calls != null ? { calls } : {}) });
+    }
+  }
+  for (const raw of lines) {
+    const line = cleanLine(raw).replace(/^\s*[-*•]\s*/, ""); if (!line || /^model\s+/i.test(line)) continue;
+    const match = line.match(/(?:`([^`]+)`|(.+?))\s*(?::|\||│|┃|—|\s{2,})/); const name = match?.[1] ?? match?.[2];
+    if (!name || rows.has(name.trim()) || /^(?:model|total)$/i.test(name.trim())) continue;
     const tokens = metric(line, ["tokens?", "tok"]) ?? magnitudeBeforeLabel(line, "tokens?"); const calls = metric(line, ["calls?", "requests?"]) ?? magnitudeBeforeLabel(line, "calls?"); const costMatch = line.match(/\$\s*([\d,.]+)/);
+    if (tokens == null && calls == null && !costMatch) continue;
     rows.set(name.trim(), { model: name.trim(), ...(tokens != null ? { tokens } : {}), ...(calls != null ? { calls } : {}), ...(costMatch ? { cost: numeric(costMatch[1]) ?? undefined } : {}) });
   }
   return [...rows.values()];
