@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { createSkillsSnapshot, markSkillsDiscoveryFailure } from "./skills-parser.mjs";
 
 const execFileP = promisify(execFile);
 const HERMES = process.env.HERMES_BIN || "hermes";
@@ -160,6 +161,23 @@ async function mirrorHealth() {
     gateway = /gateway[^\n]*(running|online)/i.test(out) ? "running" : "stopped";
   } catch (e) { detail = e.message.split("\n")[0]; }
   await setStore("hermes-health", { online, gateway, detail, lastSeen: new Date().toISOString() });
+}
+
+async function mirrorSkills() {
+  const attemptedAt = new Date().toISOString();
+  try {
+    const listOutput = await hermes(["skills", "list", "--source", "all"], { timeout: 15000 });
+    const [versionOutput, profileOutput] = await Promise.all([
+      hermes(["--version"], { timeout: 8000 }).catch(() => ""),
+      hermes(["profile", "show", "default"], { timeout: 8000 }).catch(() => ""),
+    ]);
+    const snapshot = createSkillsSnapshot({ listOutput, versionOutput, profileOutput, syncedAt: attemptedAt });
+    await setStore("hermes-skills", snapshot);
+  } catch {
+    log("skills list failed; preserving the last successful snapshot");
+    const previous = await getStore("hermes-skills");
+    await setStore("hermes-skills", markSkillsDiscoveryFailure(previous, attemptedAt));
+  }
 }
 
 /* ─────────────── Memory Wiki (warm tier: git-tracked markdown) ─────────────── */
@@ -355,6 +373,7 @@ async function mirrorTick() {
   try { await mirrorKanban(); } catch (e) { log("mirrorKanban err", e.message); }
   try { await mirrorCrons(); } catch (e) { log("mirrorCrons err", e.message); }
   try { await mirrorHealth(); } catch (e) { log("mirrorHealth err", e.message); }
+  try { await mirrorSkills(); } catch (e) { log("mirrorSkills err", e.message); }
   try { await mirrorWiki(); } catch (e) { log("mirrorWiki err", e.message); }
   try { await mirrorCost(); } catch (e) { log("mirrorCost err", e.message); }
   try { await maybeDailyBrief(); } catch (e) { log("maybeDailyBrief err", e.message); }

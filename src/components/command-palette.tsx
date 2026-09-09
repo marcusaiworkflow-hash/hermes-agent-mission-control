@@ -18,6 +18,7 @@ import {
   Lightbulb,
   Sprout,
   ListChecks,
+  Wrench,
   Sparkles,
   CornerDownLeft,
   Search,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { label: "Ideas", href: "/ideas", icon: Lightbulb },
   { label: "Garden", href: "/garden", icon: Sprout },
   { label: "Tasks", href: "/tasks", icon: ListChecks },
+  { label: "Skills", href: "/skills", icon: Wrench },
   { label: "Hermes", href: "/hermes", icon: Sparkles },
 ];
 
