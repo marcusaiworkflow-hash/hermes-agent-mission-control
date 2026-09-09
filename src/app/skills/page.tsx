@@ -71,7 +71,7 @@ export default function SkillsPage() {
   const available = snapshot?.available === true;
   const hasWarnings = Boolean(snapshot?.warnings.length);
 
-  return <div className="relative z-10 w-full space-y-6 pb-16 pt-1">
+  return <div className="relative z-10 w-full space-y-6 pb-16 pt-7">
     <header className="hq-rise flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between" style={rise(0)}>
       <div>
         <div className="eyebrow mb-1.5">Hermes capabilities</div>
@@ -117,7 +117,7 @@ export default function SkillsPage() {
         : !skills.length && snapshot?.counts.listReported === 0 ? <Panel><EmptyState icon={<Boxes className="h-6 w-6" />} title="Hermes reported no installed skills" hint="The latest successful snapshot explicitly reported zero installed skills." /></Panel>
         : !skills.length ? <Panel><EmptyState icon={<AlertTriangle className="h-6 w-6" />} title="No verified skill records could be parsed" hint={`Hermes reported ${snapshot?.counts.listReported ?? "an unknown number of"} installed skills, but this snapshot contains no usable records.`} /></Panel>
         : !filtered.length ? <Panel><EmptyState icon={<Search className="h-6 w-6" />} title="No skills match these filters" hint="Change the search or clear filters to see the loaded inventory." action={<button type="button" onClick={clearFilters} className="btn-ghost px-3 py-1.5 text-[11px]">Clear filters</button>} /></Panel>
-        : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((skill) => <SkillCard key={skill.name} skill={skill} />)}</div>}
+        : <div className="grid max-w-[1680px] gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{filtered.map((skill) => <SkillCard key={skill.name} skill={skill} />)}</div>}
     </section>
   </div>;
 }
@@ -128,7 +128,7 @@ function Metric({ label, value, note }: { label: string; value: number | null | 
 
 function SkillCard({ skill }: { skill: HermesSkill }) {
   const status = skill.enabled === true ? "Enabled" : skill.enabled === false ? "Disabled" : "Status unknown";
-  return <article className="panel min-w-0 p-5">
+  return <article className="panel w-full min-w-0 p-5 lg:max-w-[330px]">
     <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--line)] bg-[var(--surface-2)]"><Wrench className="h-4 w-4 text-[var(--accent)]" /></span><div className="min-w-0"><h3 className="truncate text-[14px] font-semibold text-[var(--text)]" title={skill.name}>{skill.name}</h3><p className="num mt-0.5 truncate text-[9.5px] text-[var(--text-4)]" title={skill.slug}>{skill.slug}</p></div></div><Pill tone={skill.enabled === true ? "up" : skill.enabled === false ? "neutral" : "warn"} className="shrink-0 !px-2 !py-0.5 !text-[9px]">{skill.enabled === true ? <CheckCircle2 className="h-3 w-3" /> : <CircleOff className="h-3 w-3" />}{status}</Pill></div>
     <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[var(--line)] pt-4 text-[10.5px]"><div><dt className="text-[var(--text-4)]">Category</dt><dd className="mt-1 truncate text-[var(--text-2)]" title={skill.category ?? undefined}>{skill.category ?? "Unavailable"}</dd></div><div><dt className="text-[var(--text-4)]">Source</dt><dd className="mt-1 text-[var(--text-2)]">{sourceLabel[skill.source]}</dd></div><div><dt className="text-[var(--text-4)]">Trust</dt><dd className="mt-1 truncate text-[var(--text-2)]">{skill.trust ?? "Unavailable"}</dd></div><div><dt className="text-[var(--text-4)]">Provenance</dt><dd className="mt-1 flex items-center gap-1 text-[var(--text-2)]"><ShieldCheck className="h-3 w-3 text-[var(--accent)]" />Runtime reported</dd></div></dl>
   </article>;
