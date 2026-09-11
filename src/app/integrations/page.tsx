@@ -108,7 +108,7 @@ export default function IntegrationsPage() {
 
     <section className="hq-rise" style={rise(3)} aria-labelledby="integration-catalog">
       <div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Capability registry</div><h2 id="integration-catalog" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Systems and applications</h2></div><span className="num text-[10.5px] text-[var(--text-3)]">{filtered.length} shown · {integrations.length} cataloged</span></div>
-      {!filtered.length ? <Panel><EmptyState icon={<Search className="h-6 w-6" />} title="No integrations match this view" hint="Change the tab, search, or filters to widen the catalog result." /></Panel> : <div className="grid gap-3 xl:grid-cols-2">{filtered.map((item) => <IntegrationCard key={item.name} item={item} />)}</div>}
+      {!filtered.length ? <Panel><EmptyState icon={<Search className="h-6 w-6" />} title="No integrations match this view" hint="Change the tab, search, or filters to widen the catalog result." /></Panel> : <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),400px))] gap-3">{filtered.map((item) => <IntegrationCard key={item.name} item={item} />)}</div>}
     </section>
   </div>;
 }

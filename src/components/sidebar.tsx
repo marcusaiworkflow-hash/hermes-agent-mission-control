@@ -43,6 +43,14 @@ const navGroups = [
     ],
   },
   {
+    name: "Platform",
+    items: [
+      { href: "/integrations", label: "Integrations", icon: Plug },
+      { href: "/n8n-automations", label: "N8N Automations", icon: Workflow },
+      { href: "/n8n-blueprints", label: "N8N Blueprints", icon: LibraryBig },
+    ],
+  },
+  {
     name: "Growth",
     items: [
       { href: "/revenue", label: "Revenue", icon: DollarSign },
@@ -51,14 +59,6 @@ const navGroups = [
       { href: "/social", label: "Social", icon: Share2 },
       { href: "/research", label: "Research", icon: Search },
       { href: "/brand-factory", label: "Brand Factory", icon: Factory },
-    ],
-  },
-  {
-    name: "Platform",
-    items: [
-      { href: "/integrations", label: "Integrations", icon: Plug },
-      { href: "/n8n-automations", label: "N8N Automations", icon: Workflow },
-      { href: "/n8n-blueprints", label: "N8N Blueprints", icon: LibraryBig },
     ],
   },
   {

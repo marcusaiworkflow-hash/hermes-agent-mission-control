@@ -25,7 +25,18 @@ const blueprints: Blueprint[] = [
   { name: "Daily Intelligence Brief", category: "Research", description: "Collect selected sources and synthesize a concise, source-aware operator brief.", useCase: "Create a repeatable daily intelligence review without inventing unsupported conclusions.", trigger: "Scheduled daily window", stages: ["Collect sources", "Deduplicate", "Summarize", "Quality check", "Deliver brief"], required: ["Approved research sources"], optional: ["Telegram", "Email", "Notion"], approval: "Human review policy set before delivery", complexity: "LOW", lifecycle: "TEMPLATE", version: "0.1" },
 ];
 
-const deployStages = ["Blueprint", "Review requirements", "Resolve integrations", "Agent creates draft", "Human review", "Human approval", "N8N activation"];
+const relationshipPaths = [
+  {
+    label: "Create from blueprint",
+    note: "Shape a reusable pattern into a reviewed N8N workflow.",
+    stages: ["Blueprint", "Customize", "Human Review", "Build in N8N", "Automation"],
+  },
+  {
+    label: "Capture from proven work",
+    note: "Generalize a proven workflow so the pattern can be reused.",
+    stages: ["Automation", "Prove / Refine", "Generalize", "Save as Blueprint", "Reuse"],
+  },
+];
 
 export default function N8nBlueprintsPage() {
   return <div className="relative z-10 w-full space-y-7 pb-16 pt-7">
@@ -42,14 +53,22 @@ export default function N8nBlueprintsPage() {
       </Panel>
     </section>
 
-    <section className="hq-rise" style={{ animationDelay: "90ms" }} aria-labelledby="blueprint-catalog">
-      <div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Curated starter set</div><h2 id="blueprint-catalog" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Reusable recipes</h2></div><span className="num text-[10.5px] text-[var(--text-3)]">{blueprints.length} templates · 0 deployed</span></div>
-      <div className="grid gap-4 xl:grid-cols-2">{blueprints.map((blueprint, index) => <BlueprintCard key={blueprint.name} blueprint={blueprint} index={index} />)}</div>
+    <section className="hq-rise" style={{ animationDelay: "90ms" }} aria-labelledby="blueprint-automation-relationship">
+      <div className="mb-3"><div className="eyebrow">Future architecture · inactive</div><h2 id="blueprint-automation-relationship" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Blueprints and Automations</h2><p className="mt-2 max-w-3xl text-[12px] leading-relaxed text-[var(--text-3)]">Reusable patterns can become live N8N workflows, and proven workflows can be generalized into reusable blueprints.</p></div>
+      <Panel className="overflow-hidden">
+        <div className="divide-y divide-[var(--line)]">
+          {relationshipPaths.map((path, pathIndex) => <div key={path.label} className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:items-center">
+            <div><div className="eyebrow !text-[9px]">Path {pathIndex + 1}</div><h3 className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text)]">{path.label}</h3><p className="mt-2 text-[10.5px] leading-relaxed text-[var(--text-3)]">{path.note}</p></div>
+            <div className="flex flex-col gap-2 min-[1400px]:flex-row min-[1400px]:items-center">{path.stages.map((stage, stageIndex) => <div key={stage} className="contents"><div className={`flex min-h-12 flex-1 items-center rounded-[10px] border px-3 py-2.5 ${stage.toLowerCase().includes("human review") ? "border-[color-mix(in_srgb,var(--warn)_24%,var(--line))] bg-[color-mix(in_srgb,var(--warn)_5%,var(--surface-2))]" : "border-[var(--line)] bg-[var(--surface-2)]"}`}><span className="num mr-2 text-[9px] text-[var(--text-4)]">{stageIndex + 1}</span><span className="text-[10.5px] font-medium leading-snug text-[var(--text-2)]">{stage}</span></div>{stageIndex < path.stages.length - 1 && <ArrowRight className="h-3.5 w-3.5 shrink-0 self-center rotate-90 text-[var(--text-4)] min-[1400px]:rotate-0" />}</div>)}</div>
+          </div>)}
+        </div>
+        <div className="flex items-start gap-2 border-t border-[var(--line)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-3)]"><Link2Off className="mt-0.5 h-3.5 w-3.5 shrink-0" />Both paths are explanatory only in Phase A. Neither builds, activates, or synchronizes an N8N workflow automatically; human review remains required before any future implementation becomes operational.</div>
+      </Panel>
     </section>
 
-    <section className="hq-rise" style={{ animationDelay: "135ms" }} aria-labelledby="deployment-concept">
-      <div className="mb-3"><div className="eyebrow">Future flow · inactive concept</div><h2 id="deployment-concept" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">From blueprint to deployed automation</h2></div>
-      <Panel className="overflow-hidden"><div className="flex flex-col gap-2 p-5 sm:p-6 xl:flex-row xl:items-center">{deployStages.map((stage, index) => <div key={stage} className="contents"><div className={`flex min-h-14 flex-1 items-center rounded-[10px] border px-3 py-2.5 ${index >= 4 ? "border-[color-mix(in_srgb,var(--warn)_24%,var(--line))] bg-[color-mix(in_srgb,var(--warn)_5%,var(--surface-2))]" : "border-[var(--line)] bg-[var(--surface-2)]"}`}><span className="num mr-2 text-[9px] text-[var(--text-4)]">{index + 1}</span><span className="text-[10.5px] font-medium leading-snug text-[var(--text-2)]">{stage}</span></div>{index < deployStages.length - 1 && <ArrowRight className="h-3.5 w-3.5 shrink-0 self-center rotate-90 text-[var(--text-4)] xl:rotate-0" />}</div>)}</div><div className="flex items-start gap-2 border-t border-[var(--line)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-3)]"><Link2Off className="mt-0.5 h-3.5 w-3.5 shrink-0" />No deploy control is active in Phase A. A linked deployed automation will only appear after provider-backed synchronization exists.</div></Panel>
+    <section className="hq-rise" style={{ animationDelay: "135ms" }} aria-labelledby="blueprint-catalog">
+      <div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Curated starter set</div><h2 id="blueprint-catalog" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Reusable recipes</h2></div><span className="num text-[10.5px] text-[var(--text-3)]">{blueprints.length} templates · 0 deployed</span></div>
+      <div className="grid gap-4 xl:max-w-[1216px] xl:grid-cols-2 min-[1900px]:max-w-[1832px] min-[1900px]:grid-cols-3">{blueprints.map((blueprint, index) => <BlueprintCard key={blueprint.name} blueprint={blueprint} index={index} />)}</div>
     </section>
   </div>;
 }
