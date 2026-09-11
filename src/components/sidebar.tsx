@@ -17,6 +17,9 @@ import {
   Target,
   Share2,
   Plug,
+  Workflow,
+  LibraryBig,
+  Factory,
   Search,
   Brain,
   Activity,
@@ -46,8 +49,16 @@ const navGroups = [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/competitors", label: "Competitors", icon: Target },
       { href: "/social", label: "Social", icon: Share2 },
-      { href: "/integrations", label: "Integrations", icon: Plug },
       { href: "/research", label: "Research", icon: Search },
+      { href: "/brand-factory", label: "Brand Factory", icon: Factory },
+    ],
+  },
+  {
+    name: "Platform",
+    items: [
+      { href: "/integrations", label: "Integrations", icon: Plug },
+      { href: "/n8n-automations", label: "N8N Automations", icon: Workflow },
+      { href: "/n8n-blueprints", label: "N8N Blueprints", icon: LibraryBig },
     ],
   },
   {
@@ -70,6 +81,17 @@ const mobileTabsRaw = [
   { href: "/activity", label: "Activity", icon: Activity },
 ];
 
+function Logo() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="w-8 h-8 rounded-[10px] bg-[var(--text)] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
+        <span className="text-[#0a0b0d] font-bold text-[13px] tracking-tight">H</span>
+      </div>
+      <span className="font-semibold text-[var(--text)] tracking-[-0.01em] text-[15px]">Hermy HQ</span>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -88,15 +110,6 @@ export function Sidebar() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  const Logo = () => (
-    <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-[10px] bg-[var(--text)] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
-        <span className="text-[#0a0b0d] font-bold text-[13px] tracking-tight">H</span>
-      </div>
-      <span className="font-semibold text-[var(--text)] tracking-[-0.01em] text-[15px]">Hermy HQ</span>
-    </div>
-  );
 
   return (
     <>
