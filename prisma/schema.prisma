@@ -81,9 +81,9 @@ model Draft {
   quoteText       String?
 
   // Content intelligence fields
-  source          String?   // "sage" | "organic" | "csv_import"
-  engagementScore Float?    // time-weighted composite score (updated by scoring engine)
-  engagementTier  String?   // "top20" | "bottom20" | null (cleared/set on rescore)
+  source          String? // "sage" | "organic" | "csv_import"
+  engagementScore Float? // time-weighted composite score (updated by scoring engine)
+  engagementTier  String? // "top20" | "bottom20" | null (cleared/set on rescore)
 
   @@index([status])
   @@index([createdAt])
@@ -125,48 +125,48 @@ model ContentCalendar {
 }
 
 model YoutubeIdea {
-  id                String   @id @default(cuid())
-  title             String
-  hook              String?
-  angle             String?
-  hookType          String?
-  funnelStage       String?
-  status            String   @default("pending")
-  rejectedReason    String?
-  sourceUrl         String?
-  sourceSummary     String?
-  competitionScore  String?  // "gap" | "moderate" | "crowded"
-  competitionData   Json?    // { resultCount, avgViews, topVideos[], scoredAt }
-  createdAt         DateTime @default(now())
+  id               String   @id @default(cuid())
+  title            String
+  hook             String?
+  angle            String?
+  hookType         String?
+  funnelStage      String?
+  status           String   @default("pending")
+  rejectedReason   String?
+  sourceUrl        String?
+  sourceSummary    String?
+  competitionScore String? // "gap" | "moderate" | "crowded"
+  competitionData  Json? // { resultCount, avgViews, topVideos[], scoredAt }
+  createdAt        DateTime @default(now())
 
   @@index([status])
 }
 
 model YoutubeScript {
-  id              String   @id @default(cuid())
-  title           String
-  hook            String?
-  storySetup      String?
-  conflict        String?
-  insight         String?
-  cta             String?
-  caption         String?
-  onScreenText    String?
-  hookType        String?
-  funnelStage     String?
-  factCheck       Json?
-  fullScript      String?
-  status          String   @default("draft")
-  rejectedReason  String?
+  id               String   @id @default(cuid())
+  title            String
+  hook             String?
+  storySetup       String?
+  conflict         String?
+  insight          String?
+  cta              String?
+  caption          String?
+  onScreenText     String?
+  hookType         String?
+  funnelStage      String?
+  factCheck        Json?
+  fullScript       String?
+  status           String   @default("draft")
+  rejectedReason   String?
   // SEO Package
-  seoTitle        String?
-  seoDescription  String?
-  seoTags         Json?
-  seoChapters     Json?
-  titleVariants   Json?
+  seoTitle         String?
+  seoDescription   String?
+  seoTags          Json?
+  seoChapters      Json?
+  titleVariants    Json?
   thumbnailConcept String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([status])
 }
@@ -180,10 +180,10 @@ model YoutubeFeedback {
 }
 
 model LongformScript {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   title            String
   type             String?
-  status           String   @default("draft")
+  status           String    @default("draft")
   platform         String?
   platforms        Json?
   description      String?
@@ -206,10 +206,10 @@ model LongformScript {
   tweetRetweets    Int?
   tweetReplies     Int?
   postedAt         DateTime?
-  competitionScore String?  // "gap" | "moderate" | "crowded"
-  competitionData  Json?    // { resultCount, avgViews, topVideos[], scoredAt }
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  competitionScore String? // "gap" | "moderate" | "crowded"
+  competitionData  Json? // { resultCount, avgViews, topVideos[], scoredAt }
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([status])
 }
@@ -278,14 +278,14 @@ model Brief {
 // ─── Missions ───────────────────────────────────────────────────
 
 model Mission {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   agentId     String
   title       String
-  description String   @db.Text
-  status      String   @default("pending") // pending, active, completed, failed
-  priority    String   @default("medium") // high, medium, low
-  result      String?  @db.Text
-  createdAt   DateTime @default(now())
+  description String    @db.Text
+  status      String    @default("pending") // pending, active, completed, failed
+  priority    String    @default("medium") // high, medium, low
+  result      String?   @db.Text
+  createdAt   DateTime  @default(now())
   completedAt DateTime?
 
   @@index([agentId])
@@ -298,14 +298,14 @@ model Article {
   id              String    @id @default(uuid())
   title           String
   body            String    @db.Text
-  track           String    // "mega-viral" | "local-viral" | "icp-viral"
+  track           String // "mega-viral" | "local-viral" | "icp-viral"
   status          String    @default("idea") // "idea" | "draft" | "ready" | "posted"
   qtTweet         String?   @db.Text
   qtUrl           String?
   heroImageUrl    String?
   heroImageHtml   String?   @db.Text
   inspirationUrls String?   @db.Text // JSON array of URLs
-  themes          String?   // JSON array of themes
+  themes          String? // JSON array of themes
   scheduledDate   String?
   postedAt        DateTime?
   postedUrl       String?
@@ -324,7 +324,7 @@ model SavedTitle {
   id        String   @id @default(cuid())
   title     String
   track     String
-  themes    String?  // JSON array
+  themes    String? // JSON array
   createdAt DateTime @default(now())
 
   @@index([track])
@@ -450,12 +450,12 @@ model ClientPulseAlert {
 
 model AgentRequest {
   id            String    @id @default(cuid())
-  origin        String    @default("web")     // "web" | "hermes"
+  origin        String    @default("web") // "web" | "hermes"
   kind          String    @default("oneshot") // "oneshot" | "kanban" | "chat"
   title         String
   prompt        String?
   sideEffecting Boolean   @default(false)
-  status        String    @default("queued")  // queued | awaiting_approval | approved | running | done | failed | rejected
+  status        String    @default("queued") // queued | awaiting_approval | approved | running | done | failed | rejected
   result        String?
   error         String?
   hermesTaskId  String?
@@ -475,7 +475,7 @@ model AgentEvent {
   title     String
   detail    String?
   agent     String?
-  level     String   @default("info")     // info | up | warn | down
+  level     String   @default("info") // info | up | warn | down
   meta      Json?
   createdAt DateTime @default(now())
 
@@ -483,7 +483,7 @@ model AgentEvent {
 }
 
 model HermesTask {
-  id        String   @id                   // Hermes task id
+  id        String   @id // Hermes task id
   board     String   @default("default")
   title     String
   assignee  String?
@@ -497,10 +497,51 @@ model HermesTask {
   @@index([status])
 }
 
+// ─── Provider-backed automation registry ──────────────────────────────────
+// N8N remains the source of truth for workflow/runtime state. This model stores
+// only allowlisted provider metadata plus context owned by Hermy HQ.
+
+model Automation {
+  id                 String @id @default(cuid())
+  provider           String @default("n8n")
+  externalWorkflowId String
+
+  workflowName            String
+  workflowUrl             String?
+  providerActive          Boolean?
+  providerState           String    @default("unknown")
+  providerVersion         String?
+  triggerSummary          String?
+  integrationDependencies Json?
+  lastExecutionStatus     String?
+  lastExecutionAt         DateTime?
+  lastSyncedAt            DateTime
+
+  businessId      String?
+  nicheId         String?
+  projectId       String?
+  department      String?
+  owningAgentId   String?
+  purpose         String? @db.Text
+  approvalState   String  @default("unreviewed")
+  blueprintId     String?
+  businessStages  Json?
+  governanceNotes String? @db.Text
+
+  syncStatus String   @default("synced")
+  syncError  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, externalWorkflowId])
+  @@index([provider, providerState])
+  @@index([lastSyncedAt])
+}
+
 // ─── Hermes Memory Wiki (warm tier — git-tracked markdown, mirrored) ─────
 model HermesMemory {
-  id         String    @id            // wiki entry slug (relative path w/o .md)
-  path       String                   // file path relative to wiki root
+  id         String    @id // wiki entry slug (relative path w/o .md)
+  path       String // file path relative to wiki root
   type       String    @default("fact")
   title      String
   status     String    @default("active")

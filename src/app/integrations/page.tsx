@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Blocks,
   Bot,
@@ -47,7 +47,7 @@ const integrations: Integration[] = [
   { name: "Telegram", provider: "Telegram", purpose: "Operator messaging and future automation delivery.", category: "Operator application", status: "AVAILABLE", method: "Bot or provider connection required", capabilities: ["Receive messages", "Deliver approved notifications"], provenance: "Phase A curated catalog", icon: Send },
   { name: "Hermes Bridge", provider: "Hermy HQ", purpose: "Transports work and operational snapshots between Hermy HQ and Hermes.", category: "Infrastructure", status: "CONNECTED", method: "Existing Bridge service", capabilities: ["Request transport", "Operational snapshot mirroring"], dependency: "Supabase Postgres and Hermes runtime", provenance: "Existing Hermy HQ architecture", icon: ServerCog },
   { name: "Supabase", provider: "Supabase", purpose: "Shared Postgres persistence and coordination for Mission Control.", category: "Infrastructure", status: "CONNECTED", method: "Existing application integration", capabilities: ["Operational persistence", "Bridge coordination"], provenance: "Existing Hermy HQ architecture", icon: Database },
-  { name: "N8N", provider: "N8N", purpose: "Future workflow automation engine for governed operations.", category: "Infrastructure", status: "NOT CONFIGURED", method: "No provider connection", capabilities: ["Workflow orchestration", "Provider-backed run synchronization"], provenance: "Phase A configuration baseline", icon: Network },
+  { name: "N8N", provider: "N8N", purpose: "Self-hosted workflow automation infrastructure for governed operations.", category: "Infrastructure", status: "UNVERIFIED", method: "Server-side provider configuration", capabilities: ["Workflow orchestration", "Provider-backed metadata synchronization"], provenance: "N8N provider registry", icon: Network },
   { name: "Composio", provider: "Composio", purpose: "Future connection layer for external applications and tools.", category: "Infrastructure", status: "NOT CONFIGURED", method: "No provider connection", capabilities: ["External account connections", "Tool authorization"], provenance: "Phase A configuration baseline", icon: Blocks },
 ];
 
@@ -60,10 +60,24 @@ export default function IntegrationsPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [method, setMethod] = useState("all");
+  const [n8nState, setN8nState] = useState<{ configured: boolean; connected: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/platform/n8n/workflows", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ provider: { configured: boolean; connected: boolean } }> : null)
+      .then((body) => { if (body?.provider) setN8nState(body.provider); })
+      .catch(() => undefined);
+  }, []);
+
+  const liveIntegrations = useMemo(() => integrations.map((item) => item.name !== "N8N" ? item : {
+    ...item,
+    status: (n8nState?.connected ? "CONNECTED" : n8nState?.configured ? "NEEDS ATTENTION" : n8nState ? "NOT CONFIGURED" : "UNVERIFIED") as Status,
+    method: n8nState?.connected ? "Existing server-side provider connection" : n8nState?.configured ? "Configured; first sync required" : "Server-side provider configuration",
+  }), [n8nState]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return integrations.filter((item) => {
+    return liveIntegrations.filter((item) => {
       if (tab === "Connected" && item.status !== "CONNECTED") return false;
       if (tab === "Available" && item.status !== "AVAILABLE") return false;
       if (category !== "all" && item.category !== category) return false;
@@ -71,7 +85,7 @@ export default function IntegrationsPage() {
       if (method === "required" && item.method.startsWith("Existing")) return false;
       return !needle || [item.name, item.provider, item.purpose, item.category, item.method, ...item.capabilities].some((value) => value.toLowerCase().includes(needle));
     });
-  }, [category, method, query, tab]);
+  }, [category, liveIntegrations, method, query, tab]);
 
   return <div className="relative z-10 w-full space-y-6 pb-16 pt-7">
     <header className="hq-rise" style={rise(0)}>
@@ -88,9 +102,9 @@ export default function IntegrationsPage() {
             <p className="mt-4 max-w-2xl text-[13px] leading-relaxed text-[var(--text-2)]">The catalog separates proven platform infrastructure from applications that could be connected later. Available means cataloged capability—not an authorized account or active connection.</p>
           </div>
           <div className="grid grid-cols-3">
-            <Summary label="Cataloged" value={integrations.length} note="Curated systems" />
-            <Summary label="Connected" value={integrations.filter((item) => item.status === "CONNECTED").length} note="Architecture-backed" border />
-            <Summary label="Not configured" value={integrations.filter((item) => item.status === "NOT CONFIGURED").length} note="No provider link" border />
+            <Summary label="Cataloged" value={liveIntegrations.length} note="Curated systems" />
+            <Summary label="Connected" value={liveIntegrations.filter((item) => item.status === "CONNECTED").length} note="Architecture-backed" border />
+            <Summary label="Not configured" value={liveIntegrations.filter((item) => item.status === "NOT CONFIGURED").length} note="No provider link" border />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-[var(--line)] px-5 py-3 text-[10.5px] text-[var(--text-3)]"><span className="font-medium text-[var(--text-2)]">Responsibility model</span><span>Hermy HQ governs</span><span>·</span><span>Hermes thinks</span><span>·</span><span>Bridge transports</span><span>·</span><span>Composio connects</span><span>·</span><span>N8N automates</span><span>·</span><span>Supabase remembers</span></div>
@@ -107,7 +121,7 @@ export default function IntegrationsPage() {
     </section>
 
     <section className="hq-rise" style={rise(3)} aria-labelledby="integration-catalog">
-      <div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Capability registry</div><h2 id="integration-catalog" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Systems and applications</h2></div><span className="num text-[10.5px] text-[var(--text-3)]">{filtered.length} shown · {integrations.length} cataloged</span></div>
+      <div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Capability registry</div><h2 id="integration-catalog" className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">Systems and applications</h2></div><span className="num text-[10.5px] text-[var(--text-3)]">{filtered.length} shown · {liveIntegrations.length} cataloged</span></div>
       {!filtered.length ? <Panel><EmptyState icon={<Search className="h-6 w-6" />} title="No integrations match this view" hint="Change the tab, search, or filters to widen the catalog result." /></Panel> : <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),400px))] gap-3">{filtered.map((item) => <IntegrationCard key={item.name} item={item} />)}</div>}
     </section>
   </div>;
